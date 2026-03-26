@@ -1,13 +1,3 @@
-﻿## NOMBRE DEL DOCUMENTO: README.md
-## AUTOR: Adrián Nasarre
-## FECHA DE CREACIÓN: 2026-03-24
-## ÚLTIMA MODIFICACIÓN: 2026-03-24
-## VERSIÓN: 1.0.0
-## DESCRIPCIÓN:
-Documentación principal del proyecto. Describe objetivo, alcance técnico, estructura
-de carpetas, comandos de ejecución local y en contenedores, endpoints base y próximos
-pasos para evolucionar la solución hacia un buscador semántico empresarial completo.
-
 # Buscador Inteligente Documental (Base MVC)
 
 ## Objetivo del proyecto
