@@ -9,7 +9,7 @@ Incluye:
 - Endpoints para busqueda semantica, filtros, historial y analitica.
 - Capa de conectores (local, S3, Google Drive como placeholder).
 - Cola de ingestion con Redis + BullMQ.
-- Persistencia de documentos en S3 (o MinIO en local).
+- Persistencia de documentos en S3 (o MinIO en local). // solo MinIO
 
 ## Estructura
 ```text
