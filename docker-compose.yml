@@ -1,40 +1,11 @@
-﻿# /*******************************************************************************
-# NOMBRE DEL DOCUMENTO: docker-compose.yml
-# AUTOR: Adrián Nasarre
-# FECHA DE CREACIÓN: 2026-03-24
-# ÚLTIMA MODIFICACIÓN: 2026-03-24
-# VERSIÓN: 1.0.0
-#
-# DESCRIPCIÓN:
-# Orquesta el entorno local con API, Redis y almacenamiento compatible S3 (MinIO),
-# definiendo servicios, puertos y dependencias de arranque para desarrollo integrado.
-# *******************************************************************************/
 services:
-  api:
-    build: .
-    container_name: smart-search-api
+  mongodb:
+    image: mongo:7
+    container_name: seekpal-mongo
     ports:
-      - "3000:3000"
-    env_file:
-      - .env
-    depends_on:
-      - redis
-      - minio
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
 
-  redis:
-    image: redis:7-alpine
-    container_name: smart-search-redis
-    ports:
-      - "6379:6379"
-
-  minio:
-    image: minio/minio:latest
-    container_name: smart-search-minio
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    environment:
-      MINIO_ROOT_USER: minio
-      MINIO_ROOT_PASSWORD: minio123
-    command: server /data --console-address ":9001"
-
+volumes:
+  mongo_data:

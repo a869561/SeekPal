@@ -1,62 +1,74 @@
-# Buscador Inteligente Documental (Base MVC)
+# SeekPal — Buscador inteligente de ficheros
 
-## Objetivo del proyecto
-Base de arquitectura para una aplicacion web de busqueda inteligente sobre repositorios documentales empresariales.
+Aplicación web local para indexar y explorar directorios de ficheros con extracción automática de metadatos. TFG — fase 1: gestión de fuentes y estadísticas (sin IA).
 
-Incluye:
-- API Node.js + Express con MVC modular.
-- Autenticacion JWT.
-- Endpoints para busqueda semantica, filtros, historial y analitica.
-- Capa de conectores (local, S3, Google Drive como placeholder).
-- Cola de ingestion con Redis + BullMQ.
-- Persistencia de documentos en S3 (o MinIO en local). // solo MinIO
+## Stack
 
-## Estructura
-```text
-src/
-  app.js
-  server.js
-  config/
-  controllers/
-  jobs/
-  middlewares/
-  repositories/
-  routes/
-  services/
-  utils/
-docs/
-  architecture.md
-```
+- **Backend**: Node.js + Express + Mongoose (MongoDB)
+- **Frontend**: React + Vite + Tailwind CSS + Recharts
+- **Auth**: Contraseña única global (bcrypt) + JWT
 
-## Arranque local
-1. Copiar `.env.example` a `.env` y completar variables.
-2. Instalar dependencias:
-   ```bash
-   npm install
-   ```
-3. Ejecutar en desarrollo:
-   ```bash
-   npm run dev
-   ```
+## Requisitos
 
-## Arranque con Docker
+- Node.js 20+
+- Docker (para MongoDB)
+
+## Arranque
+
 ```bash
-docker compose up --build
+# 1. MongoDB
+docker compose up -d
+
+# 2. Variables de entorno
+cp .env.example .env
+
+# 3. Backend (puerto 3000)
+npm install
+npm run dev
+
+# 4. Frontend (puerto 5173)
+cd client
+npm install
+npm run dev
 ```
 
-## Endpoints base
-- `GET /health`
-- `POST /api/auth/register`
-- `POST /api/auth/login`
-- `POST /api/search/query`
-- `POST /api/search/ingest`
-- `GET /api/history`
-- `GET /api/analytics/summary`
-- `GET /api/connectors`
+La primera vez que arranca el backend se crea la contraseña por defecto (`seekpal`).
 
-## Siguientes pasos recomendados
-1. Sustituir repositorios en memoria por base de datos (PostgreSQL o MongoDB).
-2. Implementar un microservicio Python para embeddings con SentenceTransformers.
-3. Integrar parser real de PDF/Word/HTML en el worker de ingestion.
-4. Implementar frontend (React/Vue) consumiendo esta API.
+## API
 
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| GET | /health | No | Estado del servidor + MongoDB |
+| POST | /api/auth/login | No | `{ password }` → `{ token }` |
+| POST | /api/auth/change-password | Sí | `{ currentPassword, newPassword }` |
+| GET | /api/sources | Sí | Lista de fuentes |
+| POST | /api/sources | Sí | Añadir directorio `{ name, path }` |
+| DELETE | /api/sources/:id | Sí | Eliminar fuente y sus ficheros |
+| POST | /api/sources/:id/ingest | Sí | Inicia ingesta (SSE stream) |
+| GET | /api/stats | Sí | Resumen estadístico |
+| GET | /api/stats/files | Sí | Ficheros paginados con filtros |
+
+### SSE de ingesta
+
+El endpoint `POST /api/sources/:id/ingest` devuelve `text/event-stream` con eventos:
+
+```
+data: {"type":"progress","current":5,"total":120,"file":"doc.pdf"}
+data: {"type":"done","fileCount":120}
+data: {"type":"error","message":"..."}
+```
+
+## Variables de entorno
+
+Ver `.env.example`.
+
+## Categorías de ficheros
+
+| Categoría | Metadatos extraídos |
+|-----------|---------------------|
+| text | wordCount, charCount |
+| document | wordCount, charCount (pdf, docx, odt, pptx) |
+| image | width, height, ppi |
+| audio | duration (s), bitrate (kbps) |
+| video | duration (s), width, height, fps |
+| other | — |

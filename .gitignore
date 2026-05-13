@@ -1,59 +1,45 @@
-﻿# ==================================================
-# NOMBRE DEL DOCUMENTO: .gitignore
-# AUTOR: Adrián Nasarre
-# FECHA DE CREACION: 2026-03-24
-# ULTIMA MODIFICACION: 2026-03-24
-# VERSION: 1.0.0
-#
-# DESCRIPCION:
-# Reglas de exclusion para proyecto Node.js/Express con Docker,
-# variables de entorno y artefactos temporales.
-# ==================================================
-
 # Dependencies
 node_modules/
+client/node_modules/
 
 # Environment and secrets
 .env
+.env.local
+.env.*.local
 
 # Logs
 logs/
 *.log
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
 
-# Runtime and temporary files
+# Runtime
 *.pid
 *.pid.lock
-*.seed
 *.tmp
 *.temp
 
-# Coverage and reports
+# Coverage
 coverage/
 .nyc_output/
 
 # Build outputs
 dist/
 build/
+client/dist/
 
 # IDE/editor
-.vscode/*
-!.vscode/extensions.json
-!.vscode/settings.json
+.vscode/
 .idea/
 *.swp
 *.swo
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
 
 # OS files
 .DS_Store
 Thumbs.db
 
-# Docker overrides and local volumes
+# Docker local volumes
 .docker/
-
-# Misc
-*.tgz
-

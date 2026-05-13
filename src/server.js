@@ -1,22 +1,12 @@
-﻿/*******************************************************************************
-NOMBRE DEL DOCUMENTO: server.js
-AUTOR: Adrián Nasarre
-FECHA DE CREACIÓN: 2026-03-24
-ÚLTIMA MODIFICACIÓN: 2026-03-24
-VERSIÓN: 1.0.0
-
-DESCRIPCIÓN:
-Punto de entrada del servidor HTTP.
-*******************************************************************************/
-
 import app from "./app.js";
 import { env } from "./config/env.js";
-import { startIngestionWorker } from "./jobs/workers/ingestion.worker.js";
+import { connectDatabase } from "./config/database.js";
 
-app.listen(env.port, () => {
-  // Se inicia tambien el worker local para facilitar desarrollo inicial.
-  startIngestionWorker();
-  console.log(`API ejecutandose en puerto ${env.port}`);
+connectDatabase().then(() => {
+  app.listen(env.port, () => {
+    console.log(`SeekPal API en http://localhost:${env.port}`);
+  });
+}).catch((err) => {
+  console.error("Error conectando a MongoDB:", err.message);
+  process.exit(1);
 });
-
-

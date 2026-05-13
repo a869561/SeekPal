@@ -1,15 +1,4 @@
-﻿# /*******************************************************************************
-# NOMBRE DEL DOCUMENTO: Dockerfile
-# AUTOR: Adrián Nasarre
-# FECHA DE CREACIÓN: 2026-03-24
-# ÚLTIMA MODIFICACIÓN: 2026-03-24
-# VERSIÓN: 1.0.0
-#
-# DESCRIPCIÓN:
-# Define la imagen de ejecución para la API Node.js, instala dependencias de producción,
-# copia el código fuente y expone el puerto de servicio para despliegue en contenedores.
-# *******************************************************************************/
-FROM node:20-alpine
+﻿FROM node:20-alpine
 
 WORKDIR /app
 
@@ -19,6 +8,9 @@ RUN npm install --production
 COPY . .
 
 EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD wget -qO- http://localhost:3000/health || exit 1
 
 CMD ["npm", "start"]
 
