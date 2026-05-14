@@ -28,7 +28,7 @@ export const statsService = {
     };
   },
 
-  async getFiles({ sourceId, category, page = 1, limit = 50 }) {
+  async getFiles({ sourceId, category, page = 1, limit = 50, sortBy = "size", sortDir = -1 }) {
     const filter = {};
     if (sourceId) filter.sourceId = sourceId;
     if (category) filter.category = category;
@@ -36,7 +36,7 @@ export const statsService = {
     const skip = (page - 1) * limit;
     const [files, total] = await Promise.all([
       File.find(filter)
-        .sort({ size: -1 })
+        .sort({ [sortBy]: sortDir })
         .skip(skip)
         .limit(limit)
         .lean(),

@@ -13,12 +13,15 @@ export const statsController = {
 
   async files(req, res, next) {
     try {
-      const { sourceId, category, page, limit } = req.query;
+      const { sourceId, category, page, limit, sortBy, sortDir } = req.query;
+      const ALLOWED_SORT = new Set(["name", "size", "modifiedAt", "createdAt"]);
       const data = await statsService.getFiles({
         sourceId,
         category,
         page: page ? Number(page) : 1,
         limit: limit ? Number(limit) : 50,
+        sortBy:  ALLOWED_SORT.has(sortBy) ? sortBy : "size",
+        sortDir: sortDir === "asc" ? 1 : -1,
       });
       return ok(res, data);
     } catch (error) {

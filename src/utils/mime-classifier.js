@@ -34,6 +34,20 @@ const VIDEO_EXTENSIONS = new Set([
   ".mp4", ".avi", ".mpeg", ".mpg", ".mov", ".mkv", ".webm", ".wmv", ".flv", ".m4v", ".3gp",
 ]);
 
+const ALL_EXTENSIONS = new Set([
+  ...TEXT_EXTENSIONS,
+  ...DOCUMENT_EXTENSIONS.keys(),
+  ...IMAGE_INGESTIBLE,
+  ...IMAGE_NON_INGESTIBLE,
+  ...AUDIO_EXTENSIONS,
+  ...VIDEO_EXTENSIONS,
+]);
+
+export function isIndexable(filePath) {
+  const ext = filePath.slice(filePath.lastIndexOf(".")).toLowerCase();
+  return ALL_EXTENSIONS.has(ext);
+}
+
 export function classifyFile(filePath) {
   const ext = filePath.slice(filePath.lastIndexOf(".")).toLowerCase();
   const mimeType = mime.lookup(filePath) || "application/octet-stream";

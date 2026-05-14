@@ -8,6 +8,7 @@ router.use(verifyToken);
 router.get("/", sourcesController.list);
 router.post("/", sourcesController.add);
 router.delete("/:id", sourcesController.remove);
+router.patch("/:id/auto-index", sourcesController.toggleAutoIndex);
 router.post("/:id/ingest", sourcesController.ingest);
 
 export default router;

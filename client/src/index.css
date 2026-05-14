@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
 
 * {
   box-sizing: border-box;
@@ -6,12 +7,24 @@
 
 body {
   margin: 0;
+  font-size: 1rem;
   font-family: system-ui, -apple-system, sans-serif;
   background: #f8fafc;
   color: #1e293b;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.dark body {
+  background: #0f172a;
+  color: #f1f5f9;
 }
 
 #root {
   width: 100%;
   min-height: 100vh;
+}
+
+@keyframes scanning {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
 }

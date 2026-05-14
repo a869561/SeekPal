@@ -1,8 +1,10 @@
 import app from "./app.js";
 import { env } from "./config/env.js";
 import { connectDatabase } from "./config/database.js";
+import { initWatchers } from "./services/watcher.service.js";
 
-connectDatabase().then(() => {
+connectDatabase().then(async () => {
+  await initWatchers();
   app.listen(env.port, () => {
     console.log(`SeekPal API en http://localhost:${env.port}`);
   });

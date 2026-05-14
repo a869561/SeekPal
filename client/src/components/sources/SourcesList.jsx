@@ -1,17 +1,18 @@
 import { useState } from "react";
-import { Trash2, PlayCircle, Clock, CheckCircle, AlertCircle, Loader } from "lucide-react";
+import { Trash2, PlayCircle, Clock, CheckCircle, AlertCircle, Loader, RefreshCw } from "lucide-react";
 import IngestionProgress from "./IngestionProgress.jsx";
+import { toggleAutoIndex } from "../../api/sources.js";
 
 const STATUS_CONFIG = {
-  idle:     { icon: Clock,         color: "text-slate-400",  bg: "bg-slate-100",  label: "Sin ingestar" },
-  scanning: { icon: Loader,        color: "text-indigo-500", bg: "bg-indigo-50",  label: "Escaneando…" },
-  done:     { icon: CheckCircle,   color: "text-emerald-500",bg: "bg-emerald-50", label: "Completado" },
-  error:    { icon: AlertCircle,   color: "text-red-500",    bg: "bg-red-50",     label: "Error" },
+  idle:     { icon: Clock,       color: "text-slate-400",                        bg: "bg-slate-100 dark:bg-slate-700",      label: "Sin ingestar" },
+  scanning: { icon: Loader,      color: "text-indigo-500",                       bg: "bg-indigo-50 dark:bg-indigo-950",     label: "Escaneando…" },
+  done:     { icon: CheckCircle, color: "text-emerald-500",                      bg: "bg-emerald-50 dark:bg-emerald-950",   label: "Completado" },
+  error:    { icon: AlertCircle, color: "text-red-500",                          bg: "bg-red-50 dark:bg-red-950",           label: "Error" },
 };
 
 function formatSize(bytes) {
-  if (!bytes) return "—";
-  if (bytes < 1024) return `${bytes} B`;
+  if (bytes == null) return "—";
+  if (bytes < 1024) return `${bytes} Bytes`;
   if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
   if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
   return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
@@ -23,12 +24,23 @@ function formatDate(d) {
 }
 
 export default function SourcesList({ sources, onDelete, onUpdate }) {
-  const [ingesting, setIngesting] = useState(null); // sourceId currently ingesting
+  const [ingesting, setIngesting] = useState(null);
+  const [togglingId, setTogglingId] = useState(null);
+
+  async function handleToggleAutoIndex(source) {
+    setTogglingId(source._id);
+    try {
+      const res = await toggleAutoIndex(source._id);
+      onUpdate(res.data.data);
+    } finally {
+      setTogglingId(null);
+    }
+  }
 
   if (!sources.length) {
     return (
-      <div className="bg-white border border-dashed border-slate-200 rounded-2xl p-16 text-center">
-        <p className="text-slate-400 text-sm">No hay fuentes. Añade un directorio para empezar.</p>
+      <div className="bg-white dark:bg-slate-800 border border-dashed border-slate-200 dark:border-slate-600 rounded-2xl p-16 text-center">
+        <p className="text-slate-400 dark:text-slate-500 text-sm">No hay fuentes. Añade un directorio para empezar.</p>
       </div>
     );
   }
@@ -41,37 +53,50 @@ export default function SourcesList({ sources, onDelete, onUpdate }) {
         const isIngesting = ingesting === source._id;
 
         return (
-          <div key={source._id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+          <div key={source._id} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm">
             <div className="flex items-start justify-between gap-4">
-              {/* Info */}
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 mb-1">
-                  <h3 className="font-semibold text-slate-800 truncate">{source.name}</h3>
+                  <h3 className="font-semibold text-slate-800 dark:text-slate-100 truncate">{source.name}</h3>
                   <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${cfg.bg} ${cfg.color}`}>
                     <Icon size={11} className={source.status === "scanning" ? "animate-spin" : ""} />
                     {cfg.label}
                   </span>
                 </div>
-                <p className="text-slate-400 text-xs font-mono truncate">{source.path}</p>
-                <div className="flex items-center gap-4 mt-2 text-xs text-slate-400">
+                <p className="text-slate-400 dark:text-slate-500 text-xs font-mono truncate">{source.path}</p>
+                <div className="flex items-center gap-4 mt-2 text-xs text-slate-400 dark:text-slate-500">
                   <span>{source.fileCount ?? 0} ficheros</span>
                   <span>Última ingesta: {formatDate(source.lastIngested)}</span>
                 </div>
               </div>
 
-              {/* Actions */}
               <div className="flex items-center gap-2 flex-shrink-0">
+                {/* Auto-index toggle */}
+                <button
+                  onClick={() => handleToggleAutoIndex(source)}
+                  disabled={togglingId === source._id}
+                  title={source.autoIndex ? "Auto-indexación activada" : "Auto-indexación desactivada"}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition disabled:opacity-40 ${
+                    source.autoIndex
+                      ? "bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900"
+                      : "bg-slate-100 dark:bg-slate-700 text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600"
+                  }`}
+                >
+                  <RefreshCw size={14} className={togglingId === source._id ? "animate-spin" : ""} />
+                  Auto
+                </button>
+
                 <button
                   onClick={() => setIngesting(source._id)}
                   disabled={isIngesting || source.status === "scanning"}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 disabled:opacity-40 transition"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900 disabled:opacity-40 transition"
                 >
                   <PlayCircle size={14} />
                   Ingestar
                 </button>
                 <button
                   onClick={() => onDelete(source._id)}
-                  className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition"
+                  className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950 rounded-lg transition"
                   title="Eliminar fuente"
                 >
                   <Trash2 size={16} />
@@ -79,7 +104,6 @@ export default function SourcesList({ sources, onDelete, onUpdate }) {
               </div>
             </div>
 
-            {/* Progress bar */}
             {isIngesting && (
               <IngestionProgress
                 sourceId={source._id}

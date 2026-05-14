@@ -12,32 +12,31 @@ const CARDS = [
     key: "totalFiles",
     label: "Total ficheros",
     icon: FileText,
-    color: "bg-indigo-50 text-indigo-600",
+    color: "bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400",
     fmt: (v) => v?.toLocaleString("es-ES") ?? "0",
   },
   {
     key: "totalSize",
     label: "Tamaño total",
     icon: HardDrive,
-    color: "bg-emerald-50 text-emerald-600",
+    color: "bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400",
     fmt: formatSize,
   },
   {
     key: "activeSources",
     label: "Fuentes activas",
     icon: Database,
-    color: "bg-amber-50 text-amber-600",
+    color: "bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400",
     fmt: (v) => v ?? "0",
   },
   {
     key: "byCategory",
     label: "Ingestibles por IA",
     icon: Cpu,
-    color: "bg-purple-50 text-purple-600",
+    color: "bg-purple-50 dark:bg-purple-950 text-purple-600 dark:text-purple-400",
     fmt: (cats) => {
       if (!Array.isArray(cats)) return "0";
-      const total = cats.reduce((acc, c) => acc + (c.ingestible || 0), 0);
-      return total.toLocaleString("es-ES");
+      return cats.reduce((acc, c) => acc + (c.ingestible || 0), 0).toLocaleString("es-ES");
     },
   },
 ];
@@ -46,14 +45,14 @@ export default function StatsOverview({ summary }) {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
       {CARDS.map(({ key, label, icon: Icon, color, fmt }) => (
-        <div key={key} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+        <div key={key} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm">
           <div className={`inline-flex p-2.5 rounded-xl ${color} mb-3`}>
             <Icon size={20} />
           </div>
-          <div className="text-2xl font-bold text-slate-800">
+          <div className="text-2xl font-bold text-slate-800 dark:text-slate-100">
             {summary ? fmt(summary[key]) : "—"}
           </div>
-          <div className="text-xs text-slate-500 mt-0.5">{label}</div>
+          <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{label}</div>
         </div>
       ))}
     </div>

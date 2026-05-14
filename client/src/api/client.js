@@ -11,7 +11,8 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (r) => r,
   (err) => {
-    if (err.response?.status === 401) {
+    const isAuthEndpoint = err.config?.url?.includes("/auth/");
+    if (err.response?.status === 401 && !isAuthEndpoint) {
       localStorage.removeItem("seekpal_token");
       window.location.href = "/login";
     }

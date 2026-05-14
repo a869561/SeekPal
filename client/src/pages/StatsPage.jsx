@@ -19,8 +19,8 @@ export default function StatsPage() {
   return (
     <div className="p-8">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-800">Estadísticas</h1>
-        <p className="text-slate-500 text-sm mt-1">Resumen de ficheros indexados</p>
+        <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Estadísticas</h1>
+        <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Resumen de ficheros indexados</p>
       </div>
 
       {loading ? (

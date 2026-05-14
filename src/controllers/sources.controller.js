@@ -1,6 +1,8 @@
 import { ok, created } from "../utils/api-response.js";
 import { sourcesService } from "../services/sources.service.js";
 import { ingestSource } from "../services/scanner.service.js";
+import { startWatcher, stopWatcher } from "../services/watcher.service.js";
+import { Source } from "../models/Source.js";
 
 export const sourcesController = {
   async list(_req, res, next) {
@@ -30,6 +32,23 @@ export const sourcesController = {
     }
   },
 
+  async toggleAutoIndex(req, res, next) {
+    try {
+      const source = await Source.findById(req.params.id);
+      if (!source) return res.status(404).json({ success: false, message: "Fuente no encontrada" });
+
+      source.autoIndex = !source.autoIndex;
+      await source.save();
+
+      if (source.autoIndex) startWatcher(String(source._id), source.path);
+      else                  stopWatcher(String(source._id));
+
+      return ok(res, source);
+    } catch (error) {
+      return next(error);
+    }
+  },
+
   async ingest(req, res, next) {
     try {
       res.setHeader("Content-Type", "text/event-stream");
@@ -39,6 +58,7 @@ export const sourcesController = {
 
       const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
 
+      send({ type: "scanning" });
       await ingestSource(req.params.id, ({ current, total, file }) => {
         send({ type: "progress", current, total, file });
       });

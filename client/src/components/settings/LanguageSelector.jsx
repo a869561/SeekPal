@@ -1,0 +1,41 @@
+import { useState } from "react";
+import { Languages } from "lucide-react";
+
+const OPTIONS = [
+  { value: "es", label: "Español", flag: "🇪🇸" },
+  { value: "en", label: "English", flag: "🇬🇧" },
+];
+
+export default function LanguageSelector() {
+  const [selected, setSelected] = useState(() => localStorage.getItem("seekpal_lang") || "es");
+
+  function handleSelect(value) {
+    setSelected(value);
+    localStorage.setItem("seekpal_lang", value);
+  }
+
+  return (
+    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
+      <div className="flex items-center gap-2 mb-5">
+        <Languages size={18} className="text-indigo-500" />
+        <h2 className="font-semibold text-slate-800 dark:text-slate-100">Idioma</h2>
+      </div>
+      <div className="flex gap-3">
+        {OPTIONS.map(({ value, label, flag }) => (
+          <button
+            key={value}
+            onClick={() => handleSelect(value)}
+            className={`flex-1 flex flex-col items-center gap-2 py-3 px-2 rounded-xl border-2 transition font-medium
+              ${selected === value
+                ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400"
+                : "border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700"
+              }`}
+          >
+            <span className="text-2xl leading-none">{flag}</span>
+            <span className="text-xs">{label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}

@@ -53,8 +53,8 @@ export default function SourcesPage() {
     <div className="p-8">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Fuentes de datos</h1>
-          <p className="text-slate-500 text-sm mt-1">Directorios escaneados e indexados</p>
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Fuentes de datos</h1>
+          <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Directorios escaneados e indexados</p>
         </div>
         <button
           onClick={() => setShowModal(true)}
@@ -70,11 +70,7 @@ export default function SourcesPage() {
           <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
         </div>
       ) : (
-        <SourcesList
-          sources={sources}
-          onDelete={handleDelete}
-          onUpdate={handleSourceUpdate}
-        />
+        <SourcesList sources={sources} onDelete={handleDelete} onUpdate={handleSourceUpdate} />
       )}
 
       {showModal && (

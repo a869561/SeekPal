@@ -1,17 +1,16 @@
 import { useEffect, useState } from "react";
 import { getSources } from "../../api/sources.js";
+import { Search } from "lucide-react";
 
 export default function IngestionProgress({ sourceId, onDone }) {
+  const [phase, setPhase] = useState("connecting"); // connecting | scanning | processing | done
   const [progress, setProgress] = useState({ current: 0, total: 0, file: "" });
-  const [done, setDone] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     const token = localStorage.getItem("seekpal_token");
-    const url = `/api/sources/${sourceId}/ingest`;
-
     const xhr = new XMLHttpRequest();
-    xhr.open("POST", url, true);
+    xhr.open("POST", `/api/sources/${sourceId}/ingest`, true);
     xhr.setRequestHeader("Authorization", `Bearer ${token}`);
     xhr.setRequestHeader("Accept", "text/event-stream");
 
@@ -20,16 +19,17 @@ export default function IngestionProgress({ sourceId, onDone }) {
       const newData = xhr.responseText.slice(buffer.length);
       buffer = xhr.responseText;
 
-      const lines = newData.split("\n");
-      for (const line of lines) {
+      for (const line of newData.split("\n")) {
         if (!line.startsWith("data: ")) continue;
         try {
           const event = JSON.parse(line.slice(6));
-          if (event.type === "progress") {
+          if (event.type === "scanning") {
+            setPhase("scanning");
+          } else if (event.type === "progress") {
+            setPhase("processing");
             setProgress({ current: event.current, total: event.total, file: event.file });
           } else if (event.type === "done") {
-            setDone(true);
-            // Reload source to get updated fileCount
+            setPhase("done");
             getSources().then((r) => {
               const updated = (r.data.data || []).find((s) => s._id === sourceId);
               if (updated) onDone(updated);
@@ -47,29 +47,48 @@ export default function IngestionProgress({ sourceId, onDone }) {
     return () => xhr.abort();
   }, [sourceId]);
 
-  const pct = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
-
   if (error) {
     return (
-      <div className="mt-3 p-3 rounded-xl bg-red-50 border border-red-100 text-xs text-red-600">
+      <div className="mt-3 p-3 rounded-xl bg-red-50 dark:bg-red-950 border border-red-100 dark:border-red-900 text-xs text-red-600 dark:text-red-400">
         Error: {error}
       </div>
     );
   }
 
+  const pct = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
+  const isDone = phase === "done";
+  const isScanning = phase === "scanning" || phase === "connecting";
+
   return (
     <div className="mt-4 space-y-2">
-      <div className="flex justify-between text-xs text-slate-500">
-        <span className="truncate max-w-xs">{done ? "¡Ingesta completada!" : (progress.file || "Iniciando…")}</span>
-        <span className="font-medium ml-2 flex-shrink-0">
-          {progress.current}/{progress.total} ({pct}%)
-        </span>
+      <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+        {isScanning ? (
+          <span className="flex items-center gap-1.5">
+            <Search size={11} className="animate-pulse" />
+            Buscando ficheros…
+          </span>
+        ) : isDone ? (
+          <span className="text-emerald-600 dark:text-emerald-400 font-medium">Ingesta completada</span>
+        ) : (
+          <span className="truncate max-w-xs">{progress.file || "Procesando…"}</span>
+        )}
+
+        {!isScanning && (
+          <span className="font-medium ml-2 flex-shrink-0 tabular-nums">
+            {isDone ? `${progress.total} ficheros` : `${progress.current} / ${progress.total} (${pct}%)`}
+          </span>
+        )}
       </div>
-      <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-        <div
-          className={`h-full rounded-full transition-all duration-300 ${done ? "bg-emerald-500" : "bg-indigo-500"}`}
-          style={{ width: `${done ? 100 : pct}%` }}
-        />
+
+      <div className="h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+        {isScanning ? (
+          <div className="h-full w-1/3 rounded-full bg-indigo-400 animate-[scanning_1.2s_ease-in-out_infinite]" />
+        ) : (
+          <div
+            className={`h-full rounded-full transition-all duration-300 ${isDone ? "bg-emerald-500" : "bg-indigo-500"}`}
+            style={{ width: `${isDone ? 100 : pct}%` }}
+          />
+        )}
       </div>
     </div>
   );

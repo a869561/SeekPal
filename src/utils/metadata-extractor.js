@@ -98,11 +98,19 @@ async function extractAudioMetadata(filePath) {
 
 // ── Video ──────────────────────────────────────────────────────────────────
 
+let _ffmpeg = null;
+async function getFFmpeg() {
+  if (_ffmpeg) return _ffmpeg;
+  const ffmpeg = (await import("fluent-ffmpeg")).default;
+  const ffprobeStatic = (await import("ffprobe-static")).default;
+  ffmpeg.setFfprobePath(ffprobeStatic.path);
+  _ffmpeg = ffmpeg;
+  return _ffmpeg;
+}
+
 async function extractVideoMetadata(filePath) {
   try {
-    const ffmpeg = (await import("fluent-ffmpeg")).default;
-    const ffprobeStatic = (await import("ffprobe-static")).default;
-    ffmpeg.setFfprobePath(ffprobeStatic.path);
+    const ffmpeg = await getFFmpeg();
 
     return await new Promise((resolve) => {
       ffmpeg.ffprobe(filePath, (err, data) => {
