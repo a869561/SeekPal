@@ -179,7 +179,7 @@ export default function FilesTable() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-            {files.length === 0 && !loading ? (
+            {files.length === 0 ? (
               <tr><td colSpan={5} className="px-6 py-8 text-center text-slate-400 dark:text-slate-500 text-sm">{t("files.empty")}</td></tr>
             ) : files.map((f) => (
               <tr key={f._id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-[background-color]">
