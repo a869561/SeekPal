@@ -1,5 +1,7 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Languages } from "lucide-react";
+import { saveSettings } from "../../api/settings.js";
 
 const OPTIONS = [
   { value: "es", label: "Español", flag: "🇪🇸" },
@@ -7,18 +9,21 @@ const OPTIONS = [
 ];
 
 export default function LanguageSelector() {
+  const { t, i18n } = useTranslation();
   const [selected, setSelected] = useState(() => localStorage.getItem("seekpal_lang") || "es");
 
   function handleSelect(value) {
     setSelected(value);
     localStorage.setItem("seekpal_lang", value);
+    i18n.changeLanguage(value);
+    saveSettings({ language: value }).catch(() => {});
   }
 
   return (
     <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
       <div className="flex items-center gap-2 mb-5">
         <Languages size={18} className="text-indigo-500" />
-        <h2 className="font-semibold text-slate-800 dark:text-slate-100">Idioma</h2>
+        <h2 className="font-semibold text-slate-800 dark:text-slate-100">{t("language.title")}</h2>
       </div>
       <div className="flex gap-3">
         {OPTIONS.map(({ value, label, flag }) => (

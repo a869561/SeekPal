@@ -1,0 +1,135 @@
+{
+  "nav": {
+    "stats":    "Estadísticas",
+    "sources":  "Fuentes",
+    "settings": "Ajustes",
+    "collapse": "Contraer menú",
+    "expand":   "Expandir menú",
+    "logout":   "Cerrar sesión"
+  },
+  "login": {
+    "subtitle":    "Buscador Inteligente de Repositorios",
+    "passwordLabel": "Contraseña de acceso",
+    "placeholder": "••••••••",
+    "submit":      "Acceder",
+    "submitting":  "Accediendo...",
+    "error":       "Contraseña incorrecta"
+  },
+  "settings": {
+    "title":      "Ajustes",
+    "subtitle":   "Configuración de la aplicación",
+    "appearance": "Apariencia",
+    "security":   "Seguridad"
+  },
+  "theme": {
+    "title": "Tema",
+    "auto":  "Automático",
+    "light": "Claro",
+    "dark":  "Oscuro"
+  },
+  "fontSize": {
+    "title":  "Tamaño de texto",
+    "small":  "Pequeño",
+    "normal": "Normal",
+    "large":  "Grande"
+  },
+  "language": {
+    "title": "Idioma"
+  },
+  "password": {
+    "title":       "Cambiar contraseña",
+    "current":     "Contraseña actual",
+    "new":         "Nueva contraseña",
+    "confirm":     "Confirmar nueva contraseña",
+    "placeholder": "••••••••",
+    "minLength":   "Mínimo 4 caracteres",
+    "mismatch":    "Las contraseñas no coinciden",
+    "success":     "Contraseña actualizada",
+    "wrong":       "Contraseña incorrecta",
+    "saving":      "Guardando…",
+    "submit":      "Actualizar contraseña"
+  },
+  "sources": {
+    "title":         "Fuentes de datos",
+    "subtitle":      "Directorios escaneados e indexados",
+    "addButton":     "Añadir directorio",
+    "emptyState":    "No hay fuentes. Añade un directorio para empezar.",
+    "fileCount":     "{{count}} ficheros",
+    "lastIngest":    "Última ingesta: {{date}}",
+    "autoIndexOn":   "Auto-indexación activada",
+    "autoIndexOff":  "Auto-indexación desactivada",
+    "auto":          "Auto",
+    "ingest":        "Ingestar",
+    "deleteTooltip": "Eliminar fuente",
+    "deleteConfirm": "¿Eliminar esta fuente y todos sus ficheros indexados?",
+    "loadError":     "Error cargando fuentes",
+    "added":         "Fuente añadida",
+    "deleted":       "Fuente eliminada",
+    "addError":      "Error añadiendo fuente",
+    "deleteError":   "Error eliminando fuente",
+    "status": {
+      "idle":     "Sin ingestar",
+      "scanning": "Escaneando…",
+      "done":     "Completado",
+      "error":    "Error"
+    }
+  },
+  "addSource": {
+    "title":          "Añadir directorio",
+    "nameLabel":      "Nombre",
+    "namePlaceholder":"Nombrar recurso",
+    "dirLabel":       "Directorio",
+    "dirPlaceholder": "C:\\Users\\usuario\\Documentos",
+    "browseTooltip":  "Explorar…",
+    "browseOpening":  "Abriendo…",
+    "browse":         "Explorar",
+    "cancel":         "Cancelar",
+    "submitting":     "Añadiendo…",
+    "submit":         "Añadir fuente"
+  },
+  "ingest": {
+    "searching":  "Buscando ficheros…",
+    "done":       "Ingesta completada",
+    "processing": "Procesando…",
+    "fileCount":  "{{count}} ficheros",
+    "progress":   "{{current}} / {{total}} ({{pct}}%)",
+    "error":      "Error: {{message}}"
+  },
+  "stats": {
+    "title":          "Estadísticas",
+    "subtitle":       "Resumen de ficheros indexados",
+    "loadError":      "Error cargando estadísticas",
+    "totalFiles":     "Total ficheros",
+    "totalSize":      "Tamaño total",
+    "activeSources":  "Fuentes activas",
+    "aiIngestible":   "Ingestibles por IA",
+    "noData":         "Sin datos. Ingesta algún directorio primero.",
+    "byCategory":     "Ficheros por categoría",
+    "bySize":         "Tamaño por categoría",
+    "sizeLabel":      "Tamaño",
+    "filesUnit":      "ficheros"
+  },
+  "files": {
+    "title":      "Ficheros indexados",
+    "allSources": "Todas las fuentes",
+    "empty":      "Sin ficheros",
+    "page":       "Página {{page}} de {{pages}}",
+    "words":      "{{count}} palabras",
+    "columns": {
+      "name":     "Nombre",
+      "category": "Categoría",
+      "size":     "Tamaño",
+      "metadata": "Metadatos",
+      "modified": "Modificado"
+    },
+    "categories": {
+      "all":      "Todas",
+      "text":     "Texto",
+      "document": "Documento",
+      "image":    "Imagen",
+      "audio":    "Audio",
+      "video":    "Vídeo",
+      "other":    "Otro"
+    }
+  }
+}

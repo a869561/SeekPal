@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { FileText, HardDrive, Database, Cpu } from "lucide-react";
 
 function formatSize(bytes) {
@@ -7,41 +8,43 @@ function formatSize(bytes) {
   return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
 }
 
-const CARDS = [
-  {
-    key: "totalFiles",
-    label: "Total ficheros",
-    icon: FileText,
-    color: "bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400",
-    fmt: (v) => v?.toLocaleString("es-ES") ?? "0",
-  },
-  {
-    key: "totalSize",
-    label: "Tamaño total",
-    icon: HardDrive,
-    color: "bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400",
-    fmt: formatSize,
-  },
-  {
-    key: "activeSources",
-    label: "Fuentes activas",
-    icon: Database,
-    color: "bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400",
-    fmt: (v) => v ?? "0",
-  },
-  {
-    key: "byCategory",
-    label: "Ingestibles por IA",
-    icon: Cpu,
-    color: "bg-purple-50 dark:bg-purple-950 text-purple-600 dark:text-purple-400",
-    fmt: (cats) => {
-      if (!Array.isArray(cats)) return "0";
-      return cats.reduce((acc, c) => acc + (c.ingestible || 0), 0).toLocaleString("es-ES");
-    },
-  },
-];
-
 export default function StatsOverview({ summary }) {
+  const { t } = useTranslation();
+
+  const CARDS = [
+    {
+      key: "totalFiles",
+      label: t("stats.totalFiles"),
+      icon: FileText,
+      color: "bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400",
+      fmt: (v) => v?.toLocaleString() ?? "0",
+    },
+    {
+      key: "totalSize",
+      label: t("stats.totalSize"),
+      icon: HardDrive,
+      color: "bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400",
+      fmt: formatSize,
+    },
+    {
+      key: "activeSources",
+      label: t("stats.activeSources"),
+      icon: Database,
+      color: "bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400",
+      fmt: (v) => v ?? "0",
+    },
+    {
+      key: "byCategory",
+      label: t("stats.aiIngestible"),
+      icon: Cpu,
+      color: "bg-purple-50 dark:bg-purple-950 text-purple-600 dark:text-purple-400",
+      fmt: (cats) => {
+        if (!Array.isArray(cats)) return "0";
+        return cats.reduce((acc, c) => acc + (c.ingestible || 0), 0).toLocaleString();
+      },
+    },
+  ];
+
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
       {CARDS.map(({ key, label, icon: Icon, color, fmt }) => (

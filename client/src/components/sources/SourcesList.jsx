@@ -1,14 +1,8 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Trash2, PlayCircle, Clock, CheckCircle, AlertCircle, Loader, RefreshCw } from "lucide-react";
 import IngestionProgress from "./IngestionProgress.jsx";
 import { toggleAutoIndex } from "../../api/sources.js";
-
-const STATUS_CONFIG = {
-  idle:     { icon: Clock,       color: "text-slate-400",                        bg: "bg-slate-100 dark:bg-slate-700",      label: "Sin ingestar" },
-  scanning: { icon: Loader,      color: "text-indigo-500",                       bg: "bg-indigo-50 dark:bg-indigo-950",     label: "Escaneando…" },
-  done:     { icon: CheckCircle, color: "text-emerald-500",                      bg: "bg-emerald-50 dark:bg-emerald-950",   label: "Completado" },
-  error:    { icon: AlertCircle, color: "text-red-500",                          bg: "bg-red-50 dark:bg-red-950",           label: "Error" },
-};
 
 function formatSize(bytes) {
   if (bytes == null) return "—";
@@ -24,8 +18,16 @@ function formatDate(d) {
 }
 
 export default function SourcesList({ sources, onDelete, onUpdate }) {
+  const { t } = useTranslation();
   const [ingesting, setIngesting] = useState(null);
   const [togglingId, setTogglingId] = useState(null);
+
+  const STATUS_CONFIG = {
+    idle:     { icon: Clock,        color: "text-slate-400",   bg: "bg-slate-100 dark:bg-slate-700",    label: t("sources.status.idle") },
+    scanning: { icon: Loader,       color: "text-indigo-500",  bg: "bg-indigo-50 dark:bg-indigo-950",   label: t("sources.status.scanning") },
+    done:     { icon: CheckCircle,  color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-950", label: t("sources.status.done") },
+    error:    { icon: AlertCircle,  color: "text-red-500",     bg: "bg-red-50 dark:bg-red-950",         label: t("sources.status.error") },
+  };
 
   async function handleToggleAutoIndex(source) {
     setTogglingId(source._id);
@@ -40,7 +42,7 @@ export default function SourcesList({ sources, onDelete, onUpdate }) {
   if (!sources.length) {
     return (
       <div className="bg-white dark:bg-slate-800 border border-dashed border-slate-200 dark:border-slate-600 rounded-2xl p-16 text-center">
-        <p className="text-slate-400 dark:text-slate-500 text-sm">No hay fuentes. Añade un directorio para empezar.</p>
+        <p className="text-slate-400 dark:text-slate-500 text-sm">{t("sources.emptyState")}</p>
       </div>
     );
   }
@@ -65,17 +67,16 @@ export default function SourcesList({ sources, onDelete, onUpdate }) {
                 </div>
                 <p className="text-slate-400 dark:text-slate-500 text-xs font-mono truncate">{source.path}</p>
                 <div className="flex items-center gap-4 mt-2 text-xs text-slate-400 dark:text-slate-500">
-                  <span>{source.fileCount ?? 0} ficheros</span>
-                  <span>Última ingesta: {formatDate(source.lastIngested)}</span>
+                  <span>{t("sources.fileCount", { count: source.fileCount ?? 0 })}</span>
+                  <span>{t("sources.lastIngest", { date: formatDate(source.lastIngested) })}</span>
                 </div>
               </div>
 
               <div className="flex items-center gap-2 flex-shrink-0">
-                {/* Auto-index toggle */}
                 <button
                   onClick={() => handleToggleAutoIndex(source)}
                   disabled={togglingId === source._id}
-                  title={source.autoIndex ? "Auto-indexación activada" : "Auto-indexación desactivada"}
+                  title={source.autoIndex ? t("sources.autoIndexOn") : t("sources.autoIndexOff")}
                   className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition disabled:opacity-40 ${
                     source.autoIndex
                       ? "bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900"
@@ -83,7 +84,7 @@ export default function SourcesList({ sources, onDelete, onUpdate }) {
                   }`}
                 >
                   <RefreshCw size={14} className={togglingId === source._id ? "animate-spin" : ""} />
-                  Auto
+                  {t("sources.auto")}
                 </button>
 
                 <button
@@ -92,12 +93,12 @@ export default function SourcesList({ sources, onDelete, onUpdate }) {
                   className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900 disabled:opacity-40 transition"
                 >
                   <PlayCircle size={14} />
-                  Ingestar
+                  {t("sources.ingest")}
                 </button>
                 <button
                   onClick={() => onDelete(source._id)}
                   className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950 rounded-lg transition"
-                  title="Eliminar fuente"
+                  title={t("sources.deleteTooltip")}
                 >
                   <Trash2 size={16} />
                 </button>
@@ -107,10 +108,7 @@ export default function SourcesList({ sources, onDelete, onUpdate }) {
             {isIngesting && (
               <IngestionProgress
                 sourceId={source._id}
-                onDone={(updated) => {
-                  setIngesting(null);
-                  onUpdate(updated);
-                }}
+                onDone={(updated) => { setIngesting(null); onUpdate(updated); }}
               />
             )}
           </div>

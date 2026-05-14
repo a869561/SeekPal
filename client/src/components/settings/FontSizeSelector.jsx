@@ -1,10 +1,12 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ALargeSmall } from "lucide-react";
+import { saveSettings } from "../../api/settings.js";
 
 const OPTIONS = [
-  { value: "sm", label: "Pequeño", size: "15px" },
-  { value: "md", label: "Normal",  size: "18px" },
-  { value: "lg", label: "Grande",  size: "21px" },
+  { value: "sm", size: "15px" },
+  { value: "md", size: "18px" },
+  { value: "lg", size: "21px" },
 ];
 
 export function applyFontSize(value) {
@@ -13,22 +15,30 @@ export function applyFontSize(value) {
 }
 
 export default function FontSizeSelector() {
+  const { t } = useTranslation();
   const [selected, setSelected] = useState(() => localStorage.getItem("seekpal_fontsize") || "md");
+
+  const LABELS = {
+    sm: t("fontSize.small"),
+    md: t("fontSize.normal"),
+    lg: t("fontSize.large"),
+  };
 
   function handleSelect(value) {
     setSelected(value);
     localStorage.setItem("seekpal_fontsize", value);
     applyFontSize(value);
+    saveSettings({ fontSize: value }).catch(() => {});
   }
 
   return (
     <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
       <div className="flex items-center gap-2 mb-5">
         <ALargeSmall size={18} className="text-indigo-500" />
-        <h2 className="font-semibold text-slate-800 dark:text-slate-100">Tamaño de texto</h2>
+        <h2 className="font-semibold text-slate-800 dark:text-slate-100">{t("fontSize.title")}</h2>
       </div>
       <div className="flex gap-3">
-        {OPTIONS.map(({ value, label, size }) => (
+        {OPTIONS.map(({ value, size }) => (
           <button
             key={value}
             onClick={() => handleSelect(value)}
@@ -39,7 +49,7 @@ export default function FontSizeSelector() {
               }`}
           >
             <span style={{ fontSize: size, lineHeight: 1 }}>Aa</span>
-            <span className="text-xs">{label}</span>
+            <span className="text-xs">{LABELS[value]}</span>
           </button>
         ))}
       </div>

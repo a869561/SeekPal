@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { getSources } from "../../api/sources.js";
 import { Search } from "lucide-react";
 
 export default function IngestionProgress({ sourceId, onDone }) {
-  const [phase, setPhase] = useState("connecting"); // connecting | scanning | processing | done
+  const { t } = useTranslation();
+  const [phase, setPhase] = useState("connecting");
   const [progress, setProgress] = useState({ current: 0, total: 0, file: "" });
   const [error, setError] = useState(null);
 
@@ -50,7 +52,7 @@ export default function IngestionProgress({ sourceId, onDone }) {
   if (error) {
     return (
       <div className="mt-3 p-3 rounded-xl bg-red-50 dark:bg-red-950 border border-red-100 dark:border-red-900 text-xs text-red-600 dark:text-red-400">
-        Error: {error}
+        {t("ingest.error", { message: error })}
       </div>
     );
   }
@@ -65,17 +67,19 @@ export default function IngestionProgress({ sourceId, onDone }) {
         {isScanning ? (
           <span className="flex items-center gap-1.5">
             <Search size={11} className="animate-pulse" />
-            Buscando ficheros…
+            {t("ingest.searching")}
           </span>
         ) : isDone ? (
-          <span className="text-emerald-600 dark:text-emerald-400 font-medium">Ingesta completada</span>
+          <span className="text-emerald-600 dark:text-emerald-400 font-medium">{t("ingest.done")}</span>
         ) : (
-          <span className="truncate max-w-xs">{progress.file || "Procesando…"}</span>
+          <span className="truncate max-w-xs">{progress.file || t("ingest.processing")}</span>
         )}
 
         {!isScanning && (
           <span className="font-medium ml-2 flex-shrink-0 tabular-nums">
-            {isDone ? `${progress.total} ficheros` : `${progress.current} / ${progress.total} (${pct}%)`}
+            {isDone
+              ? t("ingest.fileCount", { count: progress.total })
+              : t("ingest.progress", { current: progress.current, total: progress.total, pct })}
           </span>
         )}
       </div>

@@ -1,18 +1,20 @@
 import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Folder, BarChart2, Settings, LogOut, ChevronLeft, ChevronRight } from "lucide-react";
 
-const NAV = [
-  { to: "/stats",    icon: BarChart2, label: "Estadísticas" },
-  { to: "/sources",  icon: Folder,    label: "Fuentes" },
-  { to: "/settings", icon: Settings,  label: "Ajustes" },
-];
-
 export default function Sidebar() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem("seekpal_sidebar") === "collapsed"
   );
+
+  const NAV = [
+    { to: "/stats",    icon: BarChart2, label: t("nav.stats") },
+    { to: "/sources",  icon: Folder,    label: t("nav.sources") },
+    { to: "/settings", icon: Settings,  label: t("nav.settings") },
+  ];
 
   function toggle() {
     const next = !collapsed;
@@ -36,7 +38,7 @@ export default function Sidebar() {
         <img
           src="/logo-icon.png"
           alt="SeekPal"
-          className={`transition-all duration-200 ${collapsed ? "h-8" : "h-12"}`}
+          className={`transition-all duration-200 object-contain ${collapsed ? "h-12 w-12" : "h-24"}`}
         />
       </div>
 
@@ -63,27 +65,33 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      {/* Footer: toggle + logout */}
-      <div className="px-2 py-3 border-t border-slate-700/50 space-y-1">
+      {/* Toggle — above the divider */}
+      <div className="px-2 py-2">
         <button
           onClick={toggle}
-          title={collapsed ? "Expandir menú" : "Colapsar menú"}
+          title={collapsed ? t("nav.expand") : t("nav.collapse")}
           className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-all ${
             collapsed ? "justify-center" : ""
           }`}
         >
-          {collapsed ? <ChevronRight size={18} className="flex-shrink-0" /> : <ChevronLeft size={18} className="flex-shrink-0" />}
-          {!collapsed && <span>Contraer menú</span>}
+          {collapsed
+            ? <ChevronRight size={18} className="flex-shrink-0" />
+            : <ChevronLeft  size={18} className="flex-shrink-0" />}
+          {!collapsed && <span>{t("nav.collapse")}</span>}
         </button>
+      </div>
+
+      {/* Logout — below the divider */}
+      <div className="px-2 py-3 border-t border-slate-700/50">
         <button
           onClick={logout}
-          title={collapsed ? "Cerrar sesión" : undefined}
+          title={collapsed ? t("nav.logout") : undefined}
           className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-all ${
             collapsed ? "justify-center" : ""
           }`}
         >
           <LogOut size={18} className="flex-shrink-0" />
-          {!collapsed && <span>Cerrar sesión</span>}
+          {!collapsed && <span>{t("nav.logout")}</span>}
         </button>
       </div>
     </aside>

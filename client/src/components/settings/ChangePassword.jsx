@@ -1,13 +1,21 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { changePassword } from "../../api/auth.js";
 import toast from "react-hot-toast";
 import { Lock, Eye, EyeOff } from "lucide-react";
 
 export default function ChangePassword() {
+  const { t } = useTranslation();
   const [form, setForm] = useState({ currentPassword: "", newPassword: "", confirm: "" });
   const [visible, setVisible] = useState({ currentPassword: false, newPassword: false, confirm: false });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+
+  const FIELDS = [
+    { field: "currentPassword", labelKey: "password.current" },
+    { field: "newPassword",     labelKey: "password.new" },
+    { field: "confirm",         labelKey: "password.confirm" },
+  ];
 
   function toggleVisible(field) {
     setVisible((v) => ({ ...v, [field]: !v[field] }));
@@ -23,52 +31,39 @@ export default function ChangePassword() {
   async function handleSubmit(e) {
     e.preventDefault();
     const newErrors = {};
-
-    if (form.newPassword.length < 4)
-      newErrors.newPassword = "Mínimo 4 caracteres";
-    if (form.newPassword !== form.confirm)
-      newErrors.confirm = "Las contraseñas no coinciden";
-
-    if (Object.keys(newErrors).length) {
-      setErrors(newErrors);
-      return;
-    }
+    if (form.newPassword.length < 4) newErrors.newPassword = t("password.minLength");
+    if (form.newPassword !== form.confirm) newErrors.confirm = t("password.mismatch");
+    if (Object.keys(newErrors).length) { setErrors(newErrors); return; }
 
     setLoading(true);
     setErrors({});
     try {
       await changePassword({ currentPassword: form.currentPassword, newPassword: form.newPassword });
-      toast.success("Contraseña actualizada");
+      toast.success(t("password.success"));
       setForm({ currentPassword: "", newPassword: "", confirm: "" });
     } catch (err) {
-      setErrors({ currentPassword: err.response?.data?.message || "Contraseña incorrecta" });
+      setErrors({ currentPassword: err.response?.data?.message || t("password.wrong") });
     } finally {
       setLoading(false);
     }
   }
 
-  const FIELDS = [
-    { field: "currentPassword", label: "Contraseña actual",          placeholder: "••••••••" },
-    { field: "newPassword",     label: "Nueva contraseña",           placeholder: "••••••••" },
-    { field: "confirm",         label: "Confirmar nueva contraseña", placeholder: "••••••••" },
-  ];
-
   return (
     <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
       <div className="flex items-center gap-2 mb-5">
         <Lock size={18} className="text-indigo-500" />
-        <h2 className="font-semibold text-slate-800 dark:text-slate-100">Cambiar contraseña</h2>
+        <h2 className="font-semibold text-slate-800 dark:text-slate-100">{t("password.title")}</h2>
       </div>
       <form onSubmit={handleSubmit} className="space-y-4">
-        {FIELDS.map(({ field, label, placeholder }) => (
+        {FIELDS.map(({ field, labelKey }) => (
           <div key={field}>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">{label}</label>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">{t(labelKey)}</label>
             <div className="relative">
               <input
                 type={visible[field] ? "text" : "password"}
                 value={form[field]}
                 onChange={update(field)}
-                placeholder={placeholder}
+                placeholder={t("password.placeholder")}
                 required
                 className={`w-full px-4 py-2.5 pr-10 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:border-transparent transition
                   bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500
@@ -85,9 +80,7 @@ export default function ChangePassword() {
                 {visible[field] ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
-            {errors[field] && (
-              <p className="text-red-500 dark:text-red-400 text-xs mt-1.5">{errors[field]}</p>
-            )}
+            {errors[field] && <p className="text-red-500 dark:text-red-400 text-xs mt-1.5">{errors[field]}</p>}
           </div>
         ))}
         <button
@@ -95,7 +88,7 @@ export default function ChangePassword() {
           disabled={loading}
           className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm disabled:opacity-50 transition mt-2"
         >
-          {loading ? "Guardando…" : "Actualizar contraseña"}
+          {loading ? t("password.saving") : t("password.submit")}
         </button>
       </form>
     </div>

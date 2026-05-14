@@ -1,0 +1,135 @@
+{
+  "nav": {
+    "stats":    "Statistics",
+    "sources":  "Sources",
+    "settings": "Settings",
+    "collapse": "Collapse menu",
+    "expand":   "Expand menu",
+    "logout":   "Log out"
+  },
+  "login": {
+    "subtitle":      "Intelligent Repository Search",
+    "passwordLabel": "Access password",
+    "placeholder":   "••••••••",
+    "submit":        "Sign in",
+    "submitting":    "Signing in...",
+    "error":         "Incorrect password"
+  },
+  "settings": {
+    "title":      "Settings",
+    "subtitle":   "Application configuration",
+    "appearance": "Appearance",
+    "security":   "Security"
+  },
+  "theme": {
+    "title": "Theme",
+    "auto":  "Auto",
+    "light": "Light",
+    "dark":  "Dark"
+  },
+  "fontSize": {
+    "title":  "Text size",
+    "small":  "Small",
+    "normal": "Normal",
+    "large":  "Large"
+  },
+  "language": {
+    "title": "Language"
+  },
+  "password": {
+    "title":       "Change password",
+    "current":     "Current password",
+    "new":         "New password",
+    "confirm":     "Confirm new password",
+    "placeholder": "••••••••",
+    "minLength":   "Minimum 4 characters",
+    "mismatch":    "Passwords do not match",
+    "success":     "Password updated",
+    "wrong":       "Incorrect password",
+    "saving":      "Saving…",
+    "submit":      "Update password"
+  },
+  "sources": {
+    "title":         "Data sources",
+    "subtitle":      "Scanned and indexed directories",
+    "addButton":     "Add directory",
+    "emptyState":    "No sources. Add a directory to get started.",
+    "fileCount":     "{{count}} files",
+    "lastIngest":    "Last indexed: {{date}}",
+    "autoIndexOn":   "Auto-indexing enabled",
+    "autoIndexOff":  "Auto-indexing disabled",
+    "auto":          "Auto",
+    "ingest":        "Index",
+    "deleteTooltip": "Delete source",
+    "deleteConfirm": "Delete this source and all its indexed files?",
+    "loadError":     "Error loading sources",
+    "added":         "Source added",
+    "deleted":       "Source deleted",
+    "addError":      "Error adding source",
+    "deleteError":   "Error deleting source",
+    "status": {
+      "idle":     "Not indexed",
+      "scanning": "Scanning…",
+      "done":     "Completed",
+      "error":    "Error"
+    }
+  },
+  "addSource": {
+    "title":           "Add directory",
+    "nameLabel":       "Name",
+    "namePlaceholder": "Name this source",
+    "dirLabel":        "Directory",
+    "dirPlaceholder":  "C:\\Users\\user\\Documents",
+    "browseTooltip":   "Browse…",
+    "browseOpening":   "Opening…",
+    "browse":          "Browse",
+    "cancel":          "Cancel",
+    "submitting":      "Adding…",
+    "submit":          "Add source"
+  },
+  "ingest": {
+    "searching":  "Searching for files…",
+    "done":       "Indexing complete",
+    "processing": "Processing…",
+    "fileCount":  "{{count}} files",
+    "progress":   "{{current}} / {{total}} ({{pct}}%)",
+    "error":      "Error: {{message}}"
+  },
+  "stats": {
+    "title":         "Statistics",
+    "subtitle":      "Indexed files summary",
+    "loadError":     "Error loading statistics",
+    "totalFiles":    "Total files",
+    "totalSize":     "Total size",
+    "activeSources": "Active sources",
+    "aiIngestible":  "AI ingestible",
+    "noData":        "No data. Index a directory first.",
+    "byCategory":    "Files by category",
+    "bySize":        "Size by category",
+    "sizeLabel":     "Size",
+    "filesUnit":     "files"
+  },
+  "files": {
+    "title":      "Indexed files",
+    "allSources": "All sources",
+    "empty":      "No files",
+    "page":       "Page {{page}} of {{pages}}",
+    "words":      "{{count}} words",
+    "columns": {
+      "name":     "Name",
+      "category": "Category",
+      "size":     "Size",
+      "metadata": "Metadata",
+      "modified": "Modified"
+    },
+    "categories": {
+      "all":      "All",
+      "text":     "Text",
+      "document": "Document",
+      "image":    "Image",
+      "audio":    "Audio",
+      "video":    "Video",
+      "other":    "Other"
+    }
+  }
+}
