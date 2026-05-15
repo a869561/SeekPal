@@ -41,7 +41,7 @@ async function walkDir(dirPath) {
 async function processFile(sourceId, filePath) {
   const stat = await fs.stat(filePath);
   const ext = path.extname(filePath).toLowerCase();
-  const { category, modelIngestible, mimeType } = classifyFile(filePath);
+  const { category, mimeType } = classifyFile(filePath);
   const metadata = await extractMetadata(filePath, category, ext);
   return {
     sourceId,
@@ -50,7 +50,6 @@ async function processFile(sourceId, filePath) {
     extension: ext,
     mimeType,
     category,
-    modelIngestible,
     size: stat.size,
     createdAt: stat.birthtime,
     modifiedAt: stat.mtime,

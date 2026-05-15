@@ -1,5 +1,6 @@
 {
   "nav": {
+    "search":   "Buscar",
     "stats":    "Estadísticas",
     "sources":  "Fuentes",
     "settings": "Ajustes",
@@ -95,6 +96,31 @@
     "progress":   "{{current}} / {{total}} ({{pct}}%)",
     "error":      "Error: {{message}}"
   },
+  "search": {
+    "title":       "Resultados de búsqueda",
+    "placeholder": "Busca o pregunta sobre tus ficheros...",
+    "submit":      "Buscar",
+    "searching":   "Buscando...",
+    "subtitle":    "{{count}} ficheros encontrados para \"{{query}}\"",
+    "results":     "{{count}} ficheros encontrados",
+    "empty":       "Sin resultados para \"{{query}}\"",
+    "landing": {
+      "title":    "Busca en tus ficheros",
+      "subtitle": "Pregunta en lenguaje natural o busca por nombre de fichero"
+    },
+    "answer": {
+      "title":     "Respuesta IA",
+      "soon":      "Próximamente",
+      "configure": "Configurar modelo de IA",
+      "features": [
+        "Respuestas en lenguaje natural generadas a partir del contenido real de tus ficheros",
+        "Búsqueda semántica — encuentra documentos por significado, no solo por nombre",
+        "Fuentes citadas — cada respuesta indica qué ficheros se usaron",
+        "Soporte para modelos locales (Ollama) y remotos (OpenAI...)"
+      ]
+    },
+    "recent": "Búsquedas recientes"
+  },
   "stats": {
     "title":          "Estadísticas",
     "subtitle":       "Resumen de ficheros indexados",
@@ -102,7 +128,7 @@
     "totalFiles":     "Total ficheros",
     "totalSize":      "Tamaño total",
     "activeSources":  "Fuentes activas",
-    "aiIngestible":   "Ingestibles por IA",
+    "documents":      "Documentos de texto",
     "noData":         "Sin datos. Ingesta algún directorio primero.",
     "byCategory":     "Ficheros por categoría",
     "bySize":         "Tamaño por categoría",

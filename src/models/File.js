@@ -11,7 +11,6 @@ const fileSchema = new mongoose.Schema({
     enum: ["text", "document", "image", "audio", "video", "other"],
     default: "other",
   },
-  modelIngestible: { type: Boolean, default: false },
   size: { type: Number, default: 0 },
   createdAt: { type: Date },
   modifiedAt: { type: Date },

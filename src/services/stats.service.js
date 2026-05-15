@@ -12,7 +12,6 @@ export const statsService = {
             _id: "$category",
             count: { $sum: 1 },
             size: { $sum: "$size" },
-            ingestible: { $sum: { $cond: ["$modelIngestible", 1, 0] } },
           },
         },
         { $sort: { count: -1 } },

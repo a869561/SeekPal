@@ -43,3 +43,7 @@ Thumbs.db
 
 # Docker local volumes
 .docker/
+
+# Local launch scripts
+start.bat
+start.ps1

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Folder, BarChart2, Settings, LogOut, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Folder, BarChart2, Settings, LogOut, ChevronLeft, ChevronRight } from "lucide-react";
 
 export default function Sidebar() {
   const { t } = useTranslation();
@@ -11,6 +11,7 @@ export default function Sidebar() {
   );
 
   const NAV = [
+    { to: "/search",   icon: Search,    label: t("nav.search") },
     { to: "/stats",    icon: BarChart2, label: t("nav.stats") },
     { to: "/sources",  icon: Folder,    label: t("nav.sources") },
     { to: "/settings", icon: Settings,  label: t("nav.settings") },
@@ -29,7 +30,7 @@ export default function Sidebar() {
 
   return (
     <aside
-      className={`flex-shrink-0 bg-slate-900 dark:bg-slate-950 flex flex-col h-full transition-all duration-200 ${
+      className={`flex-shrink-0 bg-gradient-to-b from-slate-900 via-indigo-950 to-slate-900 flex flex-col h-full transition-all duration-200 ${
         collapsed ? "w-16" : "w-60"
       }`}
     >
@@ -55,7 +56,7 @@ export default function Sidebar() {
               } ${
                 isActive
                   ? "bg-indigo-600 text-white shadow-sm"
-                  : "text-slate-400 hover:text-white hover:bg-slate-800"
+                  : "text-slate-400 hover:text-white hover:bg-white/10"
               }`
             }
           >
@@ -70,7 +71,7 @@ export default function Sidebar() {
         <button
           onClick={toggle}
           title={collapsed ? t("nav.expand") : t("nav.collapse")}
-          className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-all ${
+          className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:text-white hover:bg-white/10 transition-all ${
             collapsed ? "justify-center" : ""
           }`}
         >
@@ -86,7 +87,7 @@ export default function Sidebar() {
         <button
           onClick={logout}
           title={collapsed ? t("nav.logout") : undefined}
-          className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-all ${
+          className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:text-white hover:bg-white/10 transition-all ${
             collapsed ? "justify-center" : ""
           }`}
         >

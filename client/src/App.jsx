@@ -1,7 +1,9 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "./context/ThemeContext.jsx";
+import { SearchProvider } from "./context/SearchContext.jsx";
 import Login from "./pages/Login.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
+import SearchPage from "./pages/SearchPage.jsx";
 import SourcesPage from "./pages/SourcesPage.jsx";
 import StatsPage from "./pages/StatsPage.jsx";
 import SettingsPage from "./pages/SettingsPage.jsx";
@@ -14,6 +16,7 @@ function PrivateRoute({ children }) {
 export default function App() {
   return (
     <ThemeProvider>
+      <SearchProvider>
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
@@ -25,7 +28,8 @@ export default function App() {
               </PrivateRoute>
             }
           >
-            <Route index element={<Navigate to="/stats" replace />} />
+            <Route index element={<Navigate to="/search" replace />} />
+            <Route path="search" element={<SearchPage />} />
             <Route path="sources" element={<SourcesPage />} />
             <Route path="stats" element={<StatsPage />} />
             <Route path="settings" element={<SettingsPage />} />
@@ -33,6 +37,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
+      </SearchProvider>
     </ThemeProvider>
   );
 }

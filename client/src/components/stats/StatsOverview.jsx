@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { FileText, HardDrive, Database, Cpu } from "lucide-react";
+import { FileText, HardDrive, Database, BookOpen } from "lucide-react";
 
 function formatSize(bytes) {
   if (!bytes) return "0 B";
@@ -35,12 +35,15 @@ export default function StatsOverview({ summary }) {
     },
     {
       key: "byCategory",
-      label: t("stats.aiIngestible"),
-      icon: Cpu,
+      label: t("stats.documents"),
+      icon: BookOpen,
       color: "bg-purple-50 dark:bg-purple-950 text-purple-600 dark:text-purple-400",
       fmt: (cats) => {
         if (!Array.isArray(cats)) return "0";
-        return cats.reduce((acc, c) => acc + (c.ingestible || 0), 0).toLocaleString();
+        return cats
+          .filter((c) => c._id === "text" || c._id === "document")
+          .reduce((acc, c) => acc + (c.count || 0), 0)
+          .toLocaleString();
       },
     },
   ];
@@ -48,14 +51,16 @@ export default function StatsOverview({ summary }) {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
       {CARDS.map(({ key, label, icon: Icon, color, fmt }) => (
-        <div key={key} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm">
-          <div className={`inline-flex p-2.5 rounded-xl ${color} mb-3`}>
-            <Icon size={20} />
+        <div key={key} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm flex items-center gap-4">
+          <div className={`flex-shrink-0 inline-flex p-3 rounded-xl ${color}`}>
+            <Icon size={22} />
           </div>
-          <div className="text-2xl font-bold text-slate-800 dark:text-slate-100">
-            {summary ? fmt(summary[key]) : "—"}
+          <div>
+            <div className="text-2xl font-bold text-slate-800 dark:text-slate-100 leading-none">
+              {summary ? fmt(summary[key]) : "—"}
+            </div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">{label}</div>
           </div>
-          <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{label}</div>
         </div>
       ))}
     </div>

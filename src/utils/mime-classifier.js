@@ -8,19 +8,9 @@ const TEXT_EXTENSIONS = new Set([
   ".cs", ".php", ".rb", ".swift", ".kt", ".r", ".m", ".tex", ".rst",
 ]);
 
-const DOCUMENT_EXTENSIONS = new Map([
-  [".pdf",  { modelIngestible: true }],
-  [".docx", { modelIngestible: true }],
-  [".doc",  { modelIngestible: false }],
-  [".odt",  { modelIngestible: false }],
-  [".ods",  { modelIngestible: false }],
-  [".odp",  { modelIngestible: false }],
-  [".pptx", { modelIngestible: false }],
-  [".ppt",  { modelIngestible: false }],
-  [".xlsx", { modelIngestible: false }],
-  [".xls",  { modelIngestible: false }],
-  [".rtf",  { modelIngestible: false }],
-  [".epub", { modelIngestible: false }],
+const DOCUMENT_EXTENSIONS = new Set([
+  ".pdf", ".docx", ".doc", ".odt", ".ods", ".odp",
+  ".pptx", ".ppt", ".xlsx", ".xls", ".rtf", ".epub",
 ]);
 
 const IMAGE_INGESTIBLE = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp"]);
@@ -36,7 +26,7 @@ const VIDEO_EXTENSIONS = new Set([
 
 const ALL_EXTENSIONS = new Set([
   ...TEXT_EXTENSIONS,
-  ...DOCUMENT_EXTENSIONS.keys(),
+  ...DOCUMENT_EXTENSIONS,
   ...IMAGE_INGESTIBLE,
   ...IMAGE_NON_INGESTIBLE,
   ...AUDIO_EXTENSIONS,
@@ -52,23 +42,11 @@ export function classifyFile(filePath) {
   const ext = filePath.slice(filePath.lastIndexOf(".")).toLowerCase();
   const mimeType = mime.lookup(filePath) || "application/octet-stream";
 
-  if (TEXT_EXTENSIONS.has(ext)) {
-    return { category: "text", modelIngestible: true, mimeType };
-  }
-  if (DOCUMENT_EXTENSIONS.has(ext)) {
-    return { category: "document", modelIngestible: DOCUMENT_EXTENSIONS.get(ext).modelIngestible, mimeType };
-  }
-  if (IMAGE_INGESTIBLE.has(ext)) {
-    return { category: "image", modelIngestible: true, mimeType };
-  }
-  if (IMAGE_NON_INGESTIBLE.has(ext)) {
-    return { category: "image", modelIngestible: false, mimeType };
-  }
-  if (AUDIO_EXTENSIONS.has(ext)) {
-    return { category: "audio", modelIngestible: false, mimeType };
-  }
-  if (VIDEO_EXTENSIONS.has(ext)) {
-    return { category: "video", modelIngestible: false, mimeType };
-  }
-  return { category: "other", modelIngestible: false, mimeType };
+  if (TEXT_EXTENSIONS.has(ext))        return { category: "text",     mimeType };
+  if (DOCUMENT_EXTENSIONS.has(ext))    return { category: "document",  mimeType };
+  if (IMAGE_INGESTIBLE.has(ext))       return { category: "image",     mimeType };
+  if (IMAGE_NON_INGESTIBLE.has(ext))   return { category: "image",     mimeType };
+  if (AUDIO_EXTENSIONS.has(ext))       return { category: "audio",     mimeType };
+  if (VIDEO_EXTENSIONS.has(ext))       return { category: "video",     mimeType };
+  return { category: "other", mimeType };
 }
