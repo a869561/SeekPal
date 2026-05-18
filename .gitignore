@@ -2,6 +2,15 @@
 node_modules/
 client/node_modules/
 
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+backend/.venv/
+backend/__pycache__/
+*.egg-info/
+
 # Environment and secrets
 .env
 .env.local
