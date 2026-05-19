@@ -56,3 +56,12 @@ Thumbs.db
 # Local launch scripts
 start.bat
 start.ps1
+
+# Qdrant local store
+qdrant_data/
+backend/qdrant_data/
+
+# Pytest
+.pytest_cache/
+htmlcov/
+.coverage
