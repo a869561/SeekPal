@@ -1,0 +1,32 @@
+[
+  {
+    "question": "¿Qué es SeekPal y para qué sirve?",
+    "expected_files": [],
+    "expected_pages": [],
+    "notes": "Pregunta general sobre el proyecto — adaptar expected_files al README real"
+  },
+  {
+    "question": "¿Cuáles son los modelos de IA que usa SeekPal?",
+    "expected_files": [],
+    "expected_pages": [],
+    "notes": "Debería recuperar docs sobre arquitectura RAG"
+  },
+  {
+    "question": "¿Cómo se indexan los documentos?",
+    "expected_files": [],
+    "expected_pages": [],
+    "notes": "Proceso de ingesta y chunking"
+  },
+  {
+    "question": "¿Qué formatos de archivo admite SeekPal?",
+    "expected_files": [],
+    "expected_pages": [],
+    "notes": "PDF, DOCX, PPTX, TXT, ODT…"
+  },
+  {
+    "question": "¿Cómo funciona la búsqueda semántica?",
+    "expected_files": [],
+    "expected_pages": [],
+    "notes": "Embeddings BGE-M3 + Qdrant"
+  }
+]
