@@ -36,8 +36,9 @@ from app.services import watcher_service
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    await connect_database()
+    qdrant_path = await connect_database()
     print(f"[seekpal] MongoDB conectado: {settings.mongo_uri}/{settings.mongo_db}")
+    print(f"[seekpal] Qdrant inicializado en: {qdrant_path}")
     await watcher_service.init_watchers(asyncio.get_running_loop())
     try:
         yield
