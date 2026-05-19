@@ -35,6 +35,9 @@ class VectorService:
         self._client.create_payload_index(
             self._collection, "source_id", qm.PayloadSchemaType.KEYWORD
         )
+        self._client.create_payload_index(
+            self._collection, "category", qm.PayloadSchemaType.KEYWORD
+        )
 
     def upsert(self, points: list[tuple[str, list[float], dict]]) -> None:
         if not points:

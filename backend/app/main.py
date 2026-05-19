@@ -22,6 +22,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.core.config import settings
 from app.core.database import connect_database, disconnect_database
 from app.routers import (
+    ask as ask_router,
     auth as auth_router,
     health as health_router,
     ingest as ingest_router,
@@ -97,6 +98,7 @@ app.include_router(stats_router.router)
 app.include_router(search_router.router)
 app.include_router(settings_router.router)
 app.include_router(system_router.router)
+app.include_router(ask_router.router)
 
 
 @app.get("/", include_in_schema=False)

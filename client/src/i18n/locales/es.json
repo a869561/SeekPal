@@ -98,7 +98,7 @@
   },
   "search": {
     "title":       "Resultados de búsqueda",
-    "placeholder": "Busca o pregunta sobre tus ficheros...",
+    "placeholder": "Busca por nombre de fichero...",
     "submit":      "Buscar",
     "searching":   "Buscando...",
     "subtitle":    "{{count}} ficheros encontrados para \"{{query}}\"",
@@ -108,18 +108,29 @@
       "title":    "Busca en tus ficheros",
       "subtitle": "Pregunta en lenguaje natural o busca por nombre de fichero"
     },
-    "answer": {
-      "title":     "Respuesta IA",
-      "soon":      "Próximamente",
-      "configure": "Configurar modelo de IA",
-      "features": [
-        "Respuestas en lenguaje natural generadas a partir del contenido real de tus ficheros",
-        "Búsqueda semántica — encuentra documentos por significado, no solo por nombre",
-        "Fuentes citadas — cada respuesta indica qué ficheros se usaron",
-        "Soporte para modelos locales (Ollama) y remotos (OpenAI...)"
-      ]
+    "mode": {
+      "search": "Búsqueda",
+      "ask":    "Pregunta",
+      "auto":   "Auto"
     },
     "recent": "Búsquedas recientes"
+  },
+  "ask": {
+    "title":       "Respuesta IA",
+    "placeholder": "¿Qué quieres saber sobre tus documentos?",
+    "submit":      "Preguntar",
+    "loading":     "Generando respuesta...",
+    "aiAnswer":    "Respuesta IA",
+    "noContext":   "No tengo información suficiente en los documentos indexados.",
+    "error": {
+      "ollamaDown": "El modelo de IA no está disponible. Asegúrate de que Ollama está ejecutándose.",
+      "noIndex":    "No hay documentos indexados. Ingesta al menos una fuente primero.",
+      "generic":    "Error al generar la respuesta"
+    },
+    "citations": {
+      "title": "Fuentes consultadas",
+      "page":  "p.{{page}}"
+    }
   },
   "stats": {
     "title":          "Estadísticas",

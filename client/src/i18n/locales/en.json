@@ -98,7 +98,7 @@
   },
   "search": {
     "title":       "Search results",
-    "placeholder": "Search or ask about your files...",
+    "placeholder": "Search by file name...",
     "submit":      "Search",
     "searching":   "Searching...",
     "subtitle":    "{{count}} files found for \"{{query}}\"",
@@ -108,18 +108,29 @@
       "title":    "Search your files",
       "subtitle": "Ask in natural language or search by file name"
     },
-    "answer": {
-      "title":     "AI Answer",
-      "soon":      "Coming soon",
-      "configure": "Configure AI model",
-      "features": [
-        "Natural language answers generated from the actual content of your files",
-        "Semantic search — find documents by meaning, not just by name",
-        "Cited sources — every answer shows which files were used",
-        "Support for local models (Ollama) and remote ones (OpenAI...)"
-      ]
+    "mode": {
+      "search": "Search",
+      "ask":    "Ask",
+      "auto":   "Auto"
     },
     "recent": "Recent searches"
+  },
+  "ask": {
+    "title":       "AI Answer",
+    "placeholder": "What do you want to know about your documents?",
+    "submit":      "Ask",
+    "loading":     "Generating answer...",
+    "aiAnswer":    "AI Answer",
+    "noContext":   "I don't have enough information in the indexed documents.",
+    "error": {
+      "ollamaDown": "The AI model is not available. Make sure Ollama is running.",
+      "noIndex":    "No indexed documents. Index at least one source first.",
+      "generic":    "Error generating the answer"
+    },
+    "citations": {
+      "title": "Sources consulted",
+      "page":  "p.{{page}}"
+    }
   },
   "stats": {
     "title":         "Statistics",

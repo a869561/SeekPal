@@ -1,7 +1,17 @@
+from enum import Enum
 from typing import Any
 
 from fastapi import HTTPException, status
 from fastapi.responses import JSONResponse
+
+
+class RagErrorCode(str, Enum):
+    EMBEDDING_FAILED = "embedding_failed"
+    RETRIEVAL_FAILED = "retrieval_failed"
+    GENERATION_FAILED = "generation_failed"
+    OLLAMA_UNAVAILABLE = "ollama_unavailable"
+    INVALID_QUESTION = "invalid_question"
+    NO_RESULTS = "no_results"
 
 
 def ok(data: Any = None, message: str = "OK") -> JSONResponse:
