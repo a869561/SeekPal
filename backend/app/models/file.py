@@ -7,21 +7,27 @@ from pydantic import BaseModel, Field
 
 
 FileCategory = Literal["text", "document", "image", "audio", "video", "other"]
+RagIndexStatus = Literal["pending", "done", "failed", "skipped"]
+
+
+class RagMetadata(BaseModel):
+    indexStatus: RagIndexStatus = "pending"
+    indexedChunks: int = 0
+    lastIndexedAt: datetime | None = None
+    extractor: str | None = None
+    error: str | None = None
 
 
 class FileMetadata(BaseModel):
-    # text / document
     wordCount: int | None = None
     charCount: int | None = None
-    # image
     width: int | None = None
     height: int | None = None
     ppi: float | None = None
-    # audio
     duration: int | None = None
     bitrate: int | None = None
-    # video
     fps: float | None = None
+    rag: RagMetadata | None = None
 
 
 class FileDoc(Document):
