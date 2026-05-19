@@ -29,8 +29,17 @@ _EXTENSION_MAP: dict[str, BaseExtractor] = {
 }
 
 
-def get_extractor(path: Path) -> BaseExtractor:
-    suffix = path.suffix.lower()
-    if suffix not in _EXTENSION_MAP:
-        raise UnsupportedFormatError(f"No extractor for extension: {suffix!r}")
-    return _EXTENSION_MAP[suffix]
+def get_extractor(extension_or_path, category: str = "") -> BaseExtractor | None:
+    """Resuelve el extractor por extensión.
+
+    Acepta Path (modo legacy: lanza UnsupportedFormatError si no soportado)
+    o str (devuelve None si no soportado).
+    """
+    if isinstance(extension_or_path, Path):
+        suffix = extension_or_path.suffix.lower()
+        if suffix not in _EXTENSION_MAP:
+            raise UnsupportedFormatError(f"No extractor for extension: {suffix!r}")
+        return _EXTENSION_MAP[suffix]
+
+    suffix = (extension_or_path or "").lower()
+    return _EXTENSION_MAP.get(suffix)
