@@ -139,14 +139,20 @@ async def ingest_source(
         except Exception as exc:
             print(f"[seekpal] RAG indexing failed for source {source_id}: {exc}")
 
+        # Guard: source may have been deleted while ingestion was running
+        if await Source.get(source_id) is None:
+            await FileDoc.find(FileDoc.sourceId == source_id).delete()
+            return
+
         file_count = await FileDoc.find(FileDoc.sourceId == source_id).count()
         source.status = "done"
         source.lastIngested = datetime.utcnow()
         source.fileCount = file_count
         await source.save()
     except Exception:
-        source.status = "error"
-        await source.save()
+        if await Source.get(source_id) is not None:
+            source.status = "error"
+            await source.save()
         raise
 
 

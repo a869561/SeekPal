@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getSources } from "../../api/sources.js";
 import { Search } from "lucide-react";
@@ -9,6 +9,36 @@ export default function IngestionProgress({ sourceId, onDone }) {
   const [progress, setProgress] = useState({ current: 0, total: 0, file: "" });
   const [error, setError] = useState(null);
 
+  const doneRef = useRef(false);
+  const pollRef = useRef(null);
+
+  function startPolling() {
+    let attempts = 0;
+    pollRef.current = setInterval(async () => {
+      attempts++;
+      if (attempts > 60) { // max ~3 min
+        clearInterval(pollRef.current);
+        return;
+      }
+      try {
+        const r = await getSources();
+        const s = (r.data.data || []).find((x) => x._id === sourceId);
+        if (!s || s.status !== "scanning") {
+          clearInterval(pollRef.current);
+          if (s?.status === "done") {
+            doneRef.current = true;
+            setPhase("done");
+            onDone(s);
+          } else if (s?.status === "error") {
+            setError(t("ingest.error", { message: "Ingestion failed" }));
+          }
+        }
+      } catch {
+        // ignore transient fetch errors
+      }
+    }, 3000);
+  }
+
   useEffect(() => {
     const token = localStorage.getItem("seekpal_token");
     const xhr = new XMLHttpRequest();
@@ -17,6 +47,7 @@ export default function IngestionProgress({ sourceId, onDone }) {
     xhr.setRequestHeader("Accept", "text/event-stream");
 
     let buffer = "";
+
     xhr.onprogress = () => {
       const newData = xhr.responseText.slice(buffer.length);
       buffer = xhr.responseText;
@@ -31,6 +62,7 @@ export default function IngestionProgress({ sourceId, onDone }) {
             setPhase("processing");
             setProgress({ current: event.current, total: event.total, file: event.file });
           } else if (event.type === "done") {
+            doneRef.current = true;
             setPhase("done");
             getSources().then((r) => {
               const updated = (r.data.data || []).find((s) => s._id === sourceId);
@@ -45,8 +77,19 @@ export default function IngestionProgress({ sourceId, onDone }) {
       }
     };
 
+    // SSE connection ended — if we never got "done", poll until status resolves
+    xhr.onloadend = () => {
+      if (!doneRef.current) {
+        startPolling();
+      }
+    };
+
     xhr.send();
-    return () => xhr.abort();
+
+    return () => {
+      xhr.abort();
+      clearInterval(pollRef.current);
+    };
   }, [sourceId]);
 
   if (error) {

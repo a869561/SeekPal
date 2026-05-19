@@ -29,6 +29,19 @@ async def remove_source(source_id: PydanticObjectId) -> Source:
     source = await Source.get(source_id)
     if source is None:
         raise APIError("Fuente no encontrada", status_code=404)
+
+    # Stop watcher first so no auto-reindex fires after deletion
+    from app.services import watcher_service
+    watcher_service.stop(str(source_id))
+
+    # Remove Qdrant vectors for this source
+    try:
+        from app.core.database import get_vector_service
+        vector = get_vector_service()
+        await asyncio.to_thread(vector.delete_by_source, str(source_id))
+    except Exception:
+        pass
+
     await FileDoc.find(FileDoc.sourceId == source_id).delete()
     await source.delete()
     return source
