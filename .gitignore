@@ -54,12 +54,14 @@ Thumbs.db
 .docker/
 
 # Local launch scripts
-start.bat
 start.ps1
 
 # Qdrant local store
 qdrant_data/
 backend/qdrant_data/
+
+# Ollama models flag
+backend/.models_pulled
 
 # Pytest
 .pytest_cache/
