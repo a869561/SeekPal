@@ -134,6 +134,11 @@ async def ingest_source(
         if ops_buffer:
             await FileDoc.get_pymongo_collection().bulk_write(ops_buffer, ordered=False)
 
+        try:
+            await _index_text_documents(source_id)
+        except Exception as exc:
+            print(f"[seekpal] RAG indexing failed for source {source_id}: {exc}")
+
         file_count = await FileDoc.find(FileDoc.sourceId == source_id).count()
         source.status = "done"
         source.lastIngested = datetime.utcnow()
@@ -143,3 +148,38 @@ async def ingest_source(
         source.status = "error"
         await source.save()
         raise
+
+
+async def _index_text_documents(source_id: PydanticObjectId) -> None:
+    """Lanza indexación RAG para cada FileDoc de categoría text/document."""
+    from beanie.operators import In
+
+    from app.core.database import get_index_service
+    from app.models.file import RagMetadata
+
+    try:
+        index_service = get_index_service()
+    except RuntimeError:
+        return
+
+    cursor = FileDoc.find(
+        FileDoc.sourceId == source_id,
+        In(FileDoc.category, ["text", "document"]),
+    )
+    async for file_doc in cursor:
+        result = await index_service.index_file(
+            file_id=str(file_doc.id),
+            source_id=str(file_doc.sourceId),
+            file_name=file_doc.name,
+            category=file_doc.category,
+            extension=file_doc.extension,
+            path=Path(file_doc.path),
+        )
+        file_doc.metadata.rag = RagMetadata(
+            indexStatus=result.status,
+            indexedChunks=result.chunks,
+            lastIndexedAt=result.indexed_at,
+            extractor=result.extractor,
+            error=result.error,
+        )
+        await file_doc.save()
