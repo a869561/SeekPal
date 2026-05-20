@@ -19,7 +19,11 @@ async def ingest(source_id: PydanticObjectId, request: Request):
     queue: asyncio.Queue[dict] = asyncio.Queue()
 
     async def on_progress(current: int, total: int, file: str) -> None:
-        await queue.put({"type": "progress", "current": current, "total": total, "file": file})
+        if total < 0:
+            # Negative total = indexing phase (RAG embeddings)
+            await queue.put({"type": "indexing_progress", "current": current, "total": -total, "file": file})
+        else:
+            await queue.put({"type": "progress", "current": current, "total": total, "file": file})
 
     async def runner() -> None:
         try:

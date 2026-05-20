@@ -5,8 +5,9 @@ import { Search, Brain } from "lucide-react";
 
 export default function IngestionProgress({ sourceId, onDone }) {
   const { t } = useTranslation();
-  const [phase, setPhase] = useState("connecting");
-  const [progress, setProgress] = useState({ current: 0, total: 0, file: "" });
+  const [phase, setPhase] = useState("connecting"); // connecting | scanning | processing | indexing | done
+  const [scanProgress, setScanProgress] = useState({ current: 0, total: 0, file: "" });
+  const [indexProgress, setIndexProgress] = useState({ current: 0, total: 0, file: "" });
   const [error, setError] = useState(null);
 
   const doneRef = useRef(false);
@@ -60,7 +61,10 @@ export default function IngestionProgress({ sourceId, onDone }) {
             setPhase("scanning");
           } else if (event.type === "progress") {
             setPhase("processing");
-            setProgress({ current: event.current, total: event.total, file: event.file });
+            setScanProgress({ current: event.current, total: event.total, file: event.file });
+          } else if (event.type === "indexing_progress") {
+            setPhase("indexing");
+            setIndexProgress({ current: event.current, total: event.total, file: event.file });
           } else if (event.type === "done") {
             doneRef.current = true;
             setPhase("done");
@@ -77,11 +81,10 @@ export default function IngestionProgress({ sourceId, onDone }) {
       }
     };
 
-    // SSE connection ended — if we never got "done", poll until status resolves.
-    // The backend task continues running even after the connection drops.
+    // SSE connection ended — backend task continues running independently.
     xhr.onloadend = () => {
       if (!doneRef.current) {
-        setPhase("indexing"); // show AI indexing message while we wait
+        setPhase((prev) => (prev === "processing" || prev === "indexing" ? "indexing" : prev));
         startPolling();
       }
     };
@@ -102,51 +105,87 @@ export default function IngestionProgress({ sourceId, onDone }) {
     );
   }
 
-  const pct = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
   const isDone = phase === "done";
-  const isScanning = phase === "scanning" || phase === "connecting";
+  const isConnecting = phase === "connecting";
+  const isScanning = phase === "scanning";
+  const isProcessing = phase === "processing";
   const isIndexing = phase === "indexing";
 
+  const scanPct = scanProgress.total > 0
+    ? Math.round((scanProgress.current / scanProgress.total) * 100)
+    : 0;
+  const indexPct = indexProgress.total > 0
+    ? Math.round((indexProgress.current / indexProgress.total) * 100)
+    : 0;
+
+  // Phase 2 bar is shown as soon as we enter the indexing phase
+  const showIndexBar = isIndexing || isDone;
+  // Phase 2 has no data yet (SSE dropped before indexing events arrived)
+  const indexingBlind = isIndexing && indexProgress.total === 0;
+
   return (
-    <div className="mt-4 space-y-2">
-      <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-        {isScanning ? (
+    <div className="mt-4 space-y-3">
+      {/* Phase 1 — File scanning */}
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
           <span className="flex items-center gap-1.5">
-            <Search size={11} className="animate-pulse" />
-            {t("ingest.searching")}
+            <Search size={11} className={(isConnecting || isScanning) ? "animate-pulse" : ""} />
+            {t("ingest.phase.scan")}
           </span>
-        ) : isDone ? (
-          <span className="text-emerald-600 dark:text-emerald-400 font-medium">{t("ingest.done")}</span>
-        ) : isIndexing ? (
-          <span className="flex items-center gap-1.5 text-violet-600 dark:text-violet-400">
-            <Brain size={11} className="animate-pulse" />
-            {t("ingest.indexing")}
-          </span>
-        ) : (
-          <span className="truncate max-w-xs">{progress.file || t("ingest.processing")}</span>
-        )}
-
-        {!isScanning && !isIndexing && (
-          <span className="font-medium ml-2 flex-shrink-0 tabular-nums">
-            {isDone
-              ? t("ingest.fileCount", { count: progress.total })
-              : t("ingest.progress", { current: progress.current, total: progress.total, pct })}
-          </span>
-        )}
+          {!isConnecting && !isScanning && (
+            <span className="font-medium tabular-nums ml-2 flex-shrink-0">
+              {isDone
+                ? t("ingest.fileCount", { count: scanProgress.total })
+                : t("ingest.progress", { current: scanProgress.current, total: scanProgress.total, pct: scanPct })}
+            </span>
+          )}
+        </div>
+        <div className="h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+          {isConnecting || isScanning ? (
+            <div className="h-full w-1/3 rounded-full bg-indigo-400 animate-[scanning_1.2s_ease-in-out_infinite]" />
+          ) : (
+            <div
+              className={`h-full rounded-full transition-all duration-300 ${isDone || showIndexBar ? "bg-indigo-500" : "bg-indigo-500"}`}
+              style={{ width: `${showIndexBar || isDone ? 100 : scanPct}%` }}
+            />
+          )}
+        </div>
       </div>
 
-      <div className="h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-        {isScanning ? (
-          <div className="h-full w-1/3 rounded-full bg-indigo-400 animate-[scanning_1.2s_ease-in-out_infinite]" />
-        ) : isIndexing ? (
-          <div className="h-full w-full rounded-full bg-violet-400 animate-[scanning_1.2s_ease-in-out_infinite]" />
-        ) : (
-          <div
-            className={`h-full rounded-full transition-all duration-300 ${isDone ? "bg-emerald-500" : "bg-indigo-500"}`}
-            style={{ width: `${isDone ? 100 : pct}%` }}
-          />
-        )}
-      </div>
+      {/* Phase 2 — AI indexing (appears once scan is done) */}
+      {showIndexBar && (
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-xs text-violet-600 dark:text-violet-400">
+            <span className="flex items-center gap-1.5">
+              <Brain size={11} className={isDone ? "" : "animate-pulse"} />
+              {t("ingest.phase.index")}
+            </span>
+            {!indexingBlind && (
+              <span className="font-medium tabular-nums ml-2 flex-shrink-0">
+                {isDone
+                  ? t("ingest.fileCount", { count: indexProgress.total || scanProgress.total })
+                  : t("ingest.progress", { current: indexProgress.current, total: indexProgress.total, pct: indexPct })}
+              </span>
+            )}
+          </div>
+          <div className="h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+            {indexingBlind ? (
+              <div className="h-full w-full rounded-full bg-violet-400 animate-[scanning_1.2s_ease-in-out_infinite]" />
+            ) : (
+              <div
+                className={`h-full rounded-full transition-all duration-300 ${isDone ? "bg-emerald-500" : "bg-violet-500"}`}
+                style={{ width: `${isDone ? 100 : indexPct}%` }}
+              />
+            )}
+          </div>
+        </div>
+      )}
+
+      {isDone && (
+        <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+          {t("ingest.done")}
+        </p>
+      )}
     </div>
   );
 }

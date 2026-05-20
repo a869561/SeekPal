@@ -135,7 +135,7 @@ async def ingest_source(
             await FileDoc.get_pymongo_collection().bulk_write(ops_buffer, ordered=False)
 
         try:
-            await _index_text_documents(source_id)
+            await _index_text_documents(source_id, on_progress=on_progress)
         except Exception as exc:
             print(f"[seekpal] RAG indexing failed for source {source_id}: {exc}")
 
@@ -156,7 +156,10 @@ async def ingest_source(
         raise
 
 
-async def _index_text_documents(source_id: PydanticObjectId) -> None:
+async def _index_text_documents(
+    source_id: PydanticObjectId,
+    on_progress: ProgressCallback | None = None,
+) -> None:
     """Lanza indexación RAG para cada FileDoc de categoría text/document."""
     from beanie.operators import In
 
@@ -168,11 +171,18 @@ async def _index_text_documents(source_id: PydanticObjectId) -> None:
     except RuntimeError:
         return
 
-    cursor = FileDoc.find(
+    query = FileDoc.find(
         FileDoc.sourceId == source_id,
         In(FileDoc.category, ["text", "document"]),
     )
-    async for file_doc in cursor:
+    total = await query.count()
+    indexed = 0
+
+    # Signal start of indexing phase with total = -1 as sentinel
+    if on_progress:
+        await on_progress(0, -total, "")
+
+    async for file_doc in query:
         result = await index_service.index_file(
             file_id=str(file_doc.id),
             source_id=str(file_doc.sourceId),
@@ -189,3 +199,6 @@ async def _index_text_documents(source_id: PydanticObjectId) -> None:
             error=result.error,
         )
         await file_doc.save()
+        indexed += 1
+        if on_progress:
+            await on_progress(indexed, -total, file_doc.name)

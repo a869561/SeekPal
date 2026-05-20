@@ -71,6 +71,7 @@
     "status": {
       "idle":     "Not indexed",
       "scanning": "Scanning…",
+      "indexing": "AI indexing…",
       "done":     "Completed",
       "error":    "Error"
     }
@@ -90,12 +91,16 @@
   },
   "ingest": {
     "searching":  "Searching for files…",
-    "indexing":   "AI indexing… (this may take several minutes)",
+    "indexing":   "AI indexing…",
     "done":       "Indexing complete",
     "processing": "Processing…",
     "fileCount":  "{{count}} files",
     "progress":   "{{current}} / {{total}} ({{pct}}%)",
-    "error":      "Error: {{message}}"
+    "error":      "Error: {{message}}",
+    "phase": {
+      "scan":  "File scanning",
+      "index": "AI indexing"
+    }
   },
   "search": {
     "title":       "Search results",

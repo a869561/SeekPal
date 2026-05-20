@@ -71,6 +71,7 @@
     "status": {
       "idle":     "Sin ingestar",
       "scanning": "Escaneando…",
+      "indexing": "Indexando con IA…",
       "done":     "Completado",
       "error":    "Error"
     }
@@ -90,12 +91,16 @@
   },
   "ingest": {
     "searching":  "Buscando ficheros…",
-    "indexing":   "Indexando con IA… (puede tardar varios minutos)",
+    "indexing":   "Indexando con IA…",
     "done":       "Ingesta completada",
     "processing": "Procesando…",
     "fileCount":  "{{count}} ficheros",
     "progress":   "{{current}} / {{total}} ({{pct}}%)",
-    "error":      "Error: {{message}}"
+    "error":      "Error: {{message}}",
+    "phase": {
+      "scan":  "Escaneo de archivos",
+      "index": "Indexado con IA"
+    }
   },
   "search": {
     "title":       "Resultados de búsqueda",
