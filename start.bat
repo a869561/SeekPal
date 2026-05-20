@@ -1,110 +1,101 @@
 @echo off
 setlocal enabledelayedexpansion
-title SeekPal - Launcher
+title SeekPal Launcher
+cls
 
-echo ============================================
-echo   SeekPal - Iniciando entorno
-echo ============================================
+echo.
+echo  ==========================================
+echo   SeekPal
+echo  ==========================================
 echo.
 
-REM --- 1. Docker ---
-echo [1/5] Comprobando Docker Desktop...
+REM ---- Cerrar instancias previas en puertos 3000 y 5173 ----
+echo  Cerrando instancias anteriores...
+for /f "tokens=5" %%P in ('netstat -ano 2^>nul ^| findstr ":3000 " ^| findstr "LISTENING"') do (
+    if not "%%P"=="0" taskkill /F /PID %%P /T >nul 2>&1
+)
+for /f "tokens=5" %%P in ('netstat -ano 2^>nul ^| findstr ":5173 " ^| findstr "LISTENING"') do (
+    if not "%%P"=="0" taskkill /F /PID %%P /T >nul 2>&1
+)
+for /r "%~dp0backend\qdrant_data" %%f in (*.lock) do del /f "%%f" >nul 2>&1
+timeout /t 2 /nobreak >nul
+
+REM ---- Docker ----
+echo  [1/4] Docker...
 docker info >nul 2>&1
 if not errorlevel 1 goto dockerok
 
-echo   Docker no esta corriendo. Abriendo Docker Desktop...
+echo       Abriendo Docker Desktop...
 start "" "C:\Program Files\Docker\Docker\Docker Desktop.exe"
-echo   Esperando a que Docker arranque...
-set _tries=0
+set _t=0
 :waitdocker
 timeout /t 3 /nobreak >nul
 docker info >nul 2>&1
 if not errorlevel 1 goto dockerok
-set /a _tries=!_tries!+1
-if !_tries! lss 40 goto waitdocker
-echo   ERROR: Docker no respondio tras 120s.
-pause
-exit /b 1
+set /a _t=!_t!+1
+if !_t! lss 40 goto waitdocker
+echo  ERROR: Docker no respondio. Arrancalo manualmente y reintenta.
+pause & exit /b 1
 
 :dockerok
-echo   Docker OK.
-echo.
+echo       OK
 
-REM --- 2. MongoDB ---
-echo [2/5] Levantando MongoDB...
+REM ---- MongoDB ----
+echo  [2/4] MongoDB...
 pushd "%~dp0"
-docker compose up -d mongodb
-if errorlevel 1 (
-    echo   ERROR levantando MongoDB.
-    popd
-    pause
-    exit /b 1
-)
+docker compose up -d mongodb >nul 2>&1
 popd
-echo   MongoDB OK.
-echo.
+echo       OK
 
-REM --- 3. Ollama ---
-echo [3/5] Comprobando Ollama...
+REM ---- Ollama ----
+echo  [3/4] Ollama...
 ollama --version >nul 2>&1
-if not errorlevel 1 goto ollamafound
-
-echo   Ollama no esta instalado. Intentando winget...
-winget --version >nul 2>&1
-if errorlevel 1 goto ollamamanual
-
-winget install Ollama.Ollama --accept-source-agreements --accept-package-agreements --silent
-if errorlevel 1 goto ollamamanual
-
-for /f "tokens=2*" %%A in ('reg query "HKCU\Environment" /v PATH 2^>nul ^| findstr /i "PATH"') do set USERPATH=%%B
-set "PATH=%PATH%;%USERPATH%"
-ollama --version >nul 2>&1
-if not errorlevel 1 goto ollamafound
-
-:ollamamanual
-echo   Descargando Ollama desde ollama.com...
-powershell -NoProfile -Command "try { Invoke-WebRequest -Uri 'https://ollama.com/download/OllamaSetup.exe' -OutFile $env:TEMP\OllamaSetup.exe -UseBasicParsing; Start-Process -Wait -FilePath $env:TEMP\OllamaSetup.exe -ArgumentList '/SILENT' } catch { exit 1 }"
 if errorlevel 1 (
-    echo   ERROR: no se pudo instalar Ollama automaticamente.
-    echo   Instalalo manualmente desde https://ollama.com/download y vuelve a ejecutar.
-    pause
-    exit /b 1
+    echo       Instalando Ollama...
+    winget install Ollama.Ollama --accept-source-agreements --accept-package-agreements --silent >nul 2>&1
 )
-for /f "tokens=2*" %%A in ('reg query "HKCU\Environment" /v PATH 2^>nul ^| findstr /i "PATH"') do set USERPATH=%%B
-set "PATH=%PATH%;%USERPATH%"
-
-:ollamafound
-echo   Ollama OK.
 
 tasklist /FI "IMAGENAME eq ollama.exe" 2>nul | find /I "ollama.exe" >nul
 if errorlevel 1 (
-    start "" /B ollama serve
+    start "" /B ollama serve >nul 2>&1
     timeout /t 3 /nobreak >nul
 )
 
-set "_modelflag=%~dp0backend\.models_pulled"
-if exist "%_modelflag%" goto modelsok
-echo   Descargando modelos (primera vez, puede tardar varios minutos)...
-ollama pull bge-m3
-if errorlevel 1 echo   AVISO: fallo descargando bge-m3 (reintenta despues).
-ollama pull llama3.2:3b
-if errorlevel 1 echo   AVISO: fallo descargando llama3.2:3b (reintenta despues).
-echo done > "%_modelflag%"
+set "_flag=%~dp0backend\.models_pulled"
+if not exist "%_flag%" (
+    echo       Descargando modelos ^(primera vez, varios minutos^)...
+    ollama pull bge-m3 >nul 2>&1
+    ollama pull llama3.2:3b >nul 2>&1
+    echo done > "%_flag%"
+)
+echo       OK
 
-:modelsok
-echo.
-
-REM --- 4. Backend Python ---
-echo [4/5] Lanzando backend Python en ventana separada...
-start "SeekPal Backend" cmd /k "cd /d %~dp0backend && (if not exist .venv\Scripts\python.exe (python -m venv .venv && .venv\Scripts\python -m pip install -r requirements.txt)) && .venv\Scripts\python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 3000"
-
-REM --- 5. Frontend ---
-echo [5/5] Lanzando frontend en ventana separada...
-start "SeekPal Frontend" cmd /k "cd /d %~dp0client && npm run dev"
+REM ---- Backend y Frontend ----
+echo  [4/4] Backend y Frontend...
+start "SeekPal Backend" cmd /k "cd /d "%~dp0backend" && .venv\Scripts\python -m uvicorn app.main:app --host 0.0.0.0 --port 3000 --log-level warning"
+timeout /t 2 /nobreak >nul
+start "SeekPal Frontend" cmd /k "cd /d "%~dp0client" && npm run dev"
+echo       OK
 
 echo.
-echo Listo. Backend en http://localhost:3000  Frontend en http://localhost:5173
-echo Documentacion API en http://localhost:3000/docs
+echo  ==========================================
+echo   Listo
+echo   Frontend  http://localhost:5173
+echo   Backend   http://localhost:3000
+echo   API docs  http://localhost:3000/docs
+echo  ==========================================
 echo.
-pause
+echo  Pulsa cualquier tecla para cerrar todo y salir.
+pause >nul
+
+echo  Cerrando...
+taskkill /FI "WINDOWTITLE eq SeekPal Backend*" /T /F >nul 2>&1
+taskkill /FI "WINDOWTITLE eq SeekPal Frontend*" /T /F >nul 2>&1
+for /f "tokens=5" %%P in ('netstat -ano 2^>nul ^| findstr ":3000 " ^| findstr "LISTENING"') do (
+    if not "%%P"=="0" taskkill /F /PID %%P /T >nul 2>&1
+)
+for /f "tokens=5" %%P in ('netstat -ano 2^>nul ^| findstr ":5173 " ^| findstr "LISTENING"') do (
+    if not "%%P"=="0" taskkill /F /PID %%P /T >nul 2>&1
+)
 endlocal
+exit
