@@ -90,6 +90,7 @@
   },
   "ingest": {
     "searching":  "Buscando ficheros…",
+    "indexing":   "Indexando con IA… (puede tardar varios minutos)",
     "done":       "Ingesta completada",
     "processing": "Procesando…",
     "fileCount":  "{{count}} ficheros",

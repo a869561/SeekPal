@@ -10,6 +10,9 @@ from app.services.scanner_service import ingest_source
 
 router = APIRouter(prefix="/api/sources", tags=["ingest"])
 
+# Keeps strong references so background tasks aren't garbage-collected mid-run
+_running: set[asyncio.Task] = set()
+
 
 @router.post("/{source_id}/ingest", dependencies=[Depends(require_auth)])
 async def ingest(source_id: PydanticObjectId, request: Request):
@@ -29,22 +32,20 @@ async def ingest(source_id: PydanticObjectId, request: Request):
             await queue.put({"type": "__end__"})
 
     task = asyncio.create_task(runner())
+    _running.add(task)
+    task.add_done_callback(_running.discard)
 
     async def event_stream():
-        try:
-            while True:
-                if await request.is_disconnected():
-                    task.cancel()
-                    return
-                try:
-                    event = await asyncio.wait_for(queue.get(), timeout=1.0)
-                except asyncio.TimeoutError:
-                    continue
-                if event.get("type") == "__end__":
-                    return
-                yield {"data": json.dumps(event)}
-        finally:
-            if not task.done():
-                task.cancel()
+        while True:
+            if await request.is_disconnected():
+                # Client disconnected — stop streaming but let the task finish
+                return
+            try:
+                event = await asyncio.wait_for(queue.get(), timeout=1.0)
+            except asyncio.TimeoutError:
+                continue
+            if event.get("type") == "__end__":
+                return
+            yield {"data": json.dumps(event)}
 
     return EventSourceResponse(event_stream())

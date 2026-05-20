@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getSources } from "../../api/sources.js";
-import { Search } from "lucide-react";
+import { Search, Brain } from "lucide-react";
 
 export default function IngestionProgress({ sourceId, onDone }) {
   const { t } = useTranslation();
@@ -16,7 +16,7 @@ export default function IngestionProgress({ sourceId, onDone }) {
     let attempts = 0;
     pollRef.current = setInterval(async () => {
       attempts++;
-      if (attempts > 60) { // max ~3 min
+      if (attempts > 400) { // max ~20 min
         clearInterval(pollRef.current);
         return;
       }
@@ -77,9 +77,11 @@ export default function IngestionProgress({ sourceId, onDone }) {
       }
     };
 
-    // SSE connection ended — if we never got "done", poll until status resolves
+    // SSE connection ended — if we never got "done", poll until status resolves.
+    // The backend task continues running even after the connection drops.
     xhr.onloadend = () => {
       if (!doneRef.current) {
+        setPhase("indexing"); // show AI indexing message while we wait
         startPolling();
       }
     };
@@ -103,6 +105,7 @@ export default function IngestionProgress({ sourceId, onDone }) {
   const pct = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
   const isDone = phase === "done";
   const isScanning = phase === "scanning" || phase === "connecting";
+  const isIndexing = phase === "indexing";
 
   return (
     <div className="mt-4 space-y-2">
@@ -114,11 +117,16 @@ export default function IngestionProgress({ sourceId, onDone }) {
           </span>
         ) : isDone ? (
           <span className="text-emerald-600 dark:text-emerald-400 font-medium">{t("ingest.done")}</span>
+        ) : isIndexing ? (
+          <span className="flex items-center gap-1.5 text-violet-600 dark:text-violet-400">
+            <Brain size={11} className="animate-pulse" />
+            {t("ingest.indexing")}
+          </span>
         ) : (
           <span className="truncate max-w-xs">{progress.file || t("ingest.processing")}</span>
         )}
 
-        {!isScanning && (
+        {!isScanning && !isIndexing && (
           <span className="font-medium ml-2 flex-shrink-0 tabular-nums">
             {isDone
               ? t("ingest.fileCount", { count: progress.total })
@@ -130,6 +138,8 @@ export default function IngestionProgress({ sourceId, onDone }) {
       <div className="h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
         {isScanning ? (
           <div className="h-full w-1/3 rounded-full bg-indigo-400 animate-[scanning_1.2s_ease-in-out_infinite]" />
+        ) : isIndexing ? (
+          <div className="h-full w-full rounded-full bg-violet-400 animate-[scanning_1.2s_ease-in-out_infinite]" />
         ) : (
           <div
             className={`h-full rounded-full transition-all duration-300 ${isDone ? "bg-emerald-500" : "bg-indigo-500"}`}

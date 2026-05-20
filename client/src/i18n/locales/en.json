@@ -90,6 +90,7 @@
   },
   "ingest": {
     "searching":  "Searching for files…",
+    "indexing":   "AI indexing… (this may take several minutes)",
     "done":       "Indexing complete",
     "processing": "Processing…",
     "fileCount":  "{{count}} files",
