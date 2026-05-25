@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 from app.services.rag.embedding_service import (
     EmbeddingService,
@@ -9,6 +10,8 @@ from app.services.rag.embedding_service import (
 )
 from app.services.rag.types import RetrievedChunk
 from app.services.rag.vector_service import VectorService
+
+logger = logging.getLogger("seekpal.retrieval")
 
 
 class RetrievalService:
@@ -69,7 +72,7 @@ class RetrievalService:
         try:
             scores = await self._reranker.rerank(question, passages)
         except Exception as exc:  # noqa: BLE001
-            print(f"[seekpal] Reranker fallo, usando scores hybrid: {exc}")
+            logger.warning("Reranker fallo, usando scores hybrid: %s", exc)
             return candidates[:top_k]
 
         # Reasignar score y reordenar

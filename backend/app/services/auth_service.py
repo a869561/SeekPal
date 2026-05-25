@@ -1,3 +1,5 @@
+import logging
+
 from app.core.config import settings
 from app.core.responses import APIError
 from app.core.security import (
@@ -7,13 +9,15 @@ from app.core.security import (
 )
 from app.models.config import Config
 
+logger = logging.getLogger("seekpal.auth")
+
 
 async def get_or_create_config() -> Config:
     config = await Config.find_one()
     if config is None:
         config = Config(passwordHash=hash_password(settings.default_password))
         await config.insert()
-        print(f'[auth] Contraseña por defecto inicializada: "{settings.default_password}"')
+        logger.info('Contraseña por defecto inicializada: "%s"', settings.default_password)
     return config
 
 

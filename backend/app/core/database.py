@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 
 from beanie import init_beanie
 from motor.motor_asyncio import AsyncIOMotorClient
+
+logger = logging.getLogger("seekpal.database")
 
 from app.core import runtime_settings
 from app.core.config import settings
@@ -48,7 +51,16 @@ async def connect_database() -> None:
     global _client, _vector_service, _embedding_service, _sparse_embedding_service
     global _reranker_service, _index_service, _retrieval_service, _generation_service
 
-    _client = AsyncIOMotorClient(settings.mongo_uri)
+    _client = AsyncIOMotorClient(settings.mongo_uri, serverSelectionTimeoutMS=5000)
+    # Ping real al servidor — si Mongo no responde, fallamos al arrancar con
+    # un mensaje claro en lugar de explotar al primer request HTTP.
+    try:
+        await _client.admin.command("ping")
+    except Exception as exc:
+        raise RuntimeError(
+            f"No se puede conectar a MongoDB en {settings.mongo_uri}: {exc}. "
+            "Verifica que MongoDB este corriendo y MONGO_URI sea correcta."
+        ) from exc
     db = _client[settings.mongo_db]
     await init_beanie(database=db, document_models=[Config, Source, FileDoc])
 
@@ -59,15 +71,22 @@ async def connect_database() -> None:
         if cfg is not None:
             runtime_settings.load_runtime_settings(cfg.settings)
     except Exception as exc:  # noqa: BLE001
-        print(f"[seekpal] No se pudieron leer ajustes runtime: {exc}")
+        logger.warning("No se pudieron leer ajustes runtime: %s", exc)
 
     qdrant_abs = _resolve_qdrant_path()
-    _vector_service = VectorService(
-        path=qdrant_abs,
-        collection=QDRANT_COLLECTION,
-        dim=EMBEDDING_DIM,
-    )
-    _vector_service.ensure_collection()
+    try:
+        _vector_service = VectorService(
+            path=qdrant_abs,
+            collection=QDRANT_COLLECTION,
+            dim=EMBEDDING_DIM,
+        )
+        _vector_service.ensure_collection()
+    except Exception as exc:
+        raise RuntimeError(
+            f"No se puede inicializar Qdrant en {qdrant_abs}: {exc}. "
+            "Verifica permisos de escritura y que el directorio no este bloqueado "
+            "por otro proceso (Qdrant local solo permite un proceso por path)."
+        ) from exc
 
     _embedding_service = EmbeddingService(
         model=settings.embedding_model,
@@ -86,7 +105,7 @@ async def connect_database() -> None:
         try:
             _reranker_service = RerankerService(model=settings.rag_reranker_model)
         except Exception as exc:  # noqa: BLE001
-            print(f"[seekpal] Reranker deshabilitado por error: {exc}")
+            logger.warning("Reranker deshabilitado por error: %s", exc)
             _reranker_service = None
 
     _index_service = IndexService(

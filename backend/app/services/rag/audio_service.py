@@ -10,12 +10,15 @@ Perfil del informe v3: faster-whisper "small" por defecto (~244 MB, WER
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from app.core import runtime_settings
 from app.services.rag._lazy import LazyService
+
+logger = logging.getLogger("seekpal.audio")
 
 if TYPE_CHECKING:
     from faster_whisper import WhisperModel
@@ -56,9 +59,9 @@ def _load_whisper() -> "WhisperModel":
         "whisperModel", "small"
     )
     device, compute_type = _detect_device()
-    print(f"[seekpal] Whisper: cargando '{model_name}' en {device} ({compute_type})...")
+    logger.info("Whisper: cargando '%s' en %s (%s)...", model_name, device, compute_type)
     instance = WhisperModel(model_name, device=device, compute_type=compute_type)
-    print(f"[seekpal] Whisper: listo")
+    logger.info("Whisper: listo")
     return instance
 
 

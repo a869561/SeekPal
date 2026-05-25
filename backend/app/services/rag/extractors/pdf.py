@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import fitz
@@ -11,6 +12,8 @@ from app.services.rag.extractors.pdf_docling import (
     is_docling_installed,
 )
 from app.services.rag.types import ExtractedDoc
+
+logger = logging.getLogger("seekpal.pdf")
 
 
 class PdfExtractor(BaseExtractor):
@@ -35,8 +38,8 @@ class PdfExtractor(BaseExtractor):
                     self._docling = DoclingPdfExtractor()
                 return self._docling.extract(path)
             else:
-                print(
-                    "[seekpal] useDocling=True pero docling no esta instalado — "
+                logger.warning(
+                    "useDocling=True pero docling no esta instalado — "
                     "instala con 'pip install docling' o desde Settings → "
                     "Activar PDF avanzado. Cayendo a PyMuPDF."
                 )

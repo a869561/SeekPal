@@ -13,6 +13,7 @@ Filtros aplicados al evento crudo de watchdog:
 """
 
 import asyncio
+import logging
 import threading
 from pathlib import PurePath
 from typing import Optional
@@ -29,6 +30,8 @@ from watchdog.observers import Observer
 
 from app.models.source import Source
 from app.services.scanner_service import ingest_source
+
+logger = logging.getLogger("seekpal.watcher")
 
 
 DEBOUNCE_SECONDS = 10.0
@@ -87,9 +90,9 @@ def _schedule_reingest(source_id: str) -> None:
 async def _reingest(source_id: str) -> None:
     try:
         await ingest_source(PydanticObjectId(source_id), _noop_progress)
-        print(f"[watcher] auto-reindexed source {source_id}")
+        logger.info("auto-reindexed source %s", source_id)
     except Exception as exc:  # noqa: BLE001
-        print(f"[watcher] error re-indexing {source_id}: {exc}")
+        logger.error("error re-indexing %s: %s", source_id, exc)
 
 
 class _Handler(FileSystemEventHandler):
@@ -121,9 +124,9 @@ def start(source_id: str, dir_path: str) -> None:
         observer.schedule(_Handler(source_id), dir_path, recursive=True)
         observer.start()
         _observers[source_id] = observer
-        print(f"[watcher] watching {dir_path}")
+        logger.info("watching %s", dir_path)
     except Exception as exc:  # noqa: BLE001
-        print(f"[watcher] cannot watch {dir_path}: {exc}")
+        logger.error("cannot watch %s: %s", dir_path, exc)
 
 
 def stop(source_id: str) -> None:
@@ -147,4 +150,4 @@ async def init_watchers(loop: asyncio.AbstractEventLoop) -> None:
     sources = await Source.find(Source.autoIndex == True).to_list()  # noqa: E712
     for s in sources:
         start(str(s.id), s.path)
-    print(f"[watcher] {len(sources)} watcher(s) inicializados")
+    logger.info("%d watcher(s) inicializados", len(sources))

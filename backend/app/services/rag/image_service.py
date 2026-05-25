@@ -12,6 +12,7 @@ Ambas piezas son lazy: solo se cargan/usan cuando hay imagenes que indexar.
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -19,6 +20,8 @@ from typing import TYPE_CHECKING
 from ollama import AsyncClient
 
 from app.services.rag._lazy import LazyService
+
+logger = logging.getLogger("seekpal.image")
 
 if TYPE_CHECKING:
     from rapidocr_onnxruntime import RapidOCR
@@ -35,9 +38,9 @@ _CAPTION_PROMPT = (
 
 def _load_ocr() -> "RapidOCR":
     from rapidocr_onnxruntime import RapidOCR
-    print("[seekpal] OCR: cargando RapidOCR (modelos PaddleOCR)...")
+    logger.info("OCR: cargando RapidOCR (modelos PaddleOCR)...")
     instance = RapidOCR()
-    print("[seekpal] OCR: listo")
+    logger.info("OCR: listo")
     return instance
 
 
@@ -61,7 +64,7 @@ def ocr_image(path: Path) -> str:
         # result = [(bbox, text, score), ...]
         return " ".join(item[1] for item in result if item and len(item) >= 2 and item[1])
     except Exception as exc:  # noqa: BLE001
-        print(f"[seekpal] OCR fallo en {path.name}: {exc}")
+        logger.warning("OCR fallo en %s: %s", path.name, exc)
         return ""
 
 
@@ -86,10 +89,12 @@ async def caption_image_async(path: Path) -> str:
         msg = str(exc).lower()
         model_missing = ("not found" in msg) or ("model" in msg and "pull" in msg)
         if model_missing:
-            print(f"[seekpal] Moondream no esta descargado en Ollama: 'ollama pull {_MOONDREAM_MODEL}'")
+            logger.warning(
+                "Moondream no esta descargado en Ollama: 'ollama pull %s'", _MOONDREAM_MODEL
+            )
             _caption.disable()
         else:
-            print(f"[seekpal] Captioning fallo en {path.name}: {exc}")
+            logger.warning("Captioning fallo en %s: %s", path.name, exc)
         return ""
 
 

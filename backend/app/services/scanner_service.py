@@ -6,6 +6,7 @@ Los documentos se vuelcan por lotes a Mongo mediante operaciones bulk upsert.
 """
 
 import asyncio
+import logging
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Awaitable, Callable
@@ -17,6 +18,8 @@ from app.models.file import FileDoc
 from app.models.source import Source
 from app.utils import metadata_extractor
 from app.utils.mime_classifier import classify, is_indexable
+
+logger = logging.getLogger("seekpal.scanner")
 
 
 IGNORED_DIRS = frozenset({
@@ -168,7 +171,7 @@ async def ingest_source(
         try:
             await _index_text_documents(source_id, on_progress=on_progress)
         except Exception as exc:
-            print(f"[seekpal] RAG indexing failed for source {source_id}: {exc}")
+            logger.error("RAG indexing failed for source %s: %s", source_id, exc)
 
         # Guard: source may have been deleted while ingestion was running
         if await Source.get(source_id) is None:
@@ -211,7 +214,7 @@ async def _index_text_documents(
     try:
         index_service = get_index_service()
     except RuntimeError:
-        print(f"[seekpal] RAG indexing saltado: IndexService no inicializado (source {source_id})")
+        logger.warning("RAG indexing saltado: IndexService no inicializado (source %s)", source_id)
         return
 
     # Master switch: si el usuario desactiva multimedia desde Settings,
@@ -333,7 +336,7 @@ async def _index_text_documents(
                         index_service.embed_sparse_batch(sub_batch),
                     )
                 except asyncio.TimeoutError:
-                    print(f"[seekpal] embed timeout lote {chunk_start}-{chunk_start+len(sub_batch)}")
+                    logger.warning("embed timeout lote %d-%d", chunk_start, chunk_start + len(sub_batch))
                     sub_vecs = [None] * len(sub_batch)
                     sub_sparse = await index_service.embed_sparse_batch(sub_batch)
                 all_vectors.extend(sub_vecs)

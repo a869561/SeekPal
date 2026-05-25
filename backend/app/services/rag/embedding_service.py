@@ -14,11 +14,14 @@ el texto por la mitad hasta que funcione o sea demasiado corto.
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import re
 import sys
 import unicodedata
 from pathlib import Path
+
+logger = logging.getLogger("seekpal.embedding")
 
 
 def _setup_cuda_pip_dlls() -> None:
@@ -151,7 +154,7 @@ class EmbeddingService:
             "CPUExecutionProvider": "CPU",
         }
         label = _LABEL.get(self.active_provider, self.active_provider)
-        print(f"[seekpal] FastEmbed dense: {model} -> {label}")
+        logger.info("FastEmbed dense: %s -> %s", model, label)
 
     def _embed_sync(self, texts: list[str]) -> list[list[float]]:
         return [e.tolist() for e in self._model.embed(texts, batch_size=self._batch_size)]
@@ -215,7 +218,7 @@ class SparseEmbeddingService:
 
     def __init__(self) -> None:
         self._model = SparseTextEmbedding(model_name="Qdrant/bm25")
-        print("[seekpal] FastEmbed sparse: Qdrant/bm25 cargado")
+        logger.info("FastEmbed sparse: Qdrant/bm25 cargado")
 
     def _embed_sync(self, texts: list[str]) -> list[SparseVector]:
         return [
@@ -269,7 +272,7 @@ class RerankerService:
             "DirectMLExecutionProvider": "AMD/Intel GPU (DirectML)",
             "CPUExecutionProvider": "CPU",
         }.get(self.active_provider, self.active_provider)
-        print(f"[seekpal] FastEmbed reranker: {model} -> {label}")
+        logger.info("FastEmbed reranker: %s -> %s", model, label)
 
     def _rerank_sync(self, query: str, passages: list[str]) -> list[float]:
         # TextCrossEncoder.rerank devuelve un generador de floats en el mismo orden

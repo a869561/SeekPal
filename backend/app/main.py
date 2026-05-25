@@ -11,6 +11,7 @@ Estructura MVC:
 """
 
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -21,6 +22,10 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.config import settings
 from app.core.database import connect_database, disconnect_database
+from app.core.logging_config import setup_logging
+
+setup_logging()
+logger = logging.getLogger("seekpal.main")
 from app.routers import (
     ask as ask_router,
     auth as auth_router,
@@ -63,14 +68,14 @@ async def _cleanup_orphans() -> None:
         except Exception:
             pass
     await files_col.delete_many({"_id": {"$in": orphan_ids}})
-    print(f"[seekpal] Limpiados {len(orphan_ids)} ficheros huérfanos.")
+    logger.info("Limpiados %d ficheros huérfanos", len(orphan_ids))
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     qdrant_path = await connect_database()
-    print(f"[seekpal] MongoDB conectado: {settings.mongo_uri}/{settings.mongo_db}")
-    print(f"[seekpal] Qdrant inicializado en: {qdrant_path}")
+    logger.info("MongoDB conectado: %s/%s", settings.mongo_uri, settings.mongo_db)
+    logger.info("Qdrant inicializado en: %s", qdrant_path)
     await _cleanup_orphans()
     await watcher_service.init_watchers(asyncio.get_running_loop())
     try:
@@ -115,7 +120,7 @@ async def validation_exception_handler(_request: Request, exc: RequestValidation
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(_request: Request, exc: Exception):
-    print(f"[seekpal] Unhandled error: {exc!r}")
+    logger.error("Unhandled error: %r", exc, exc_info=True)
     return JSONResponse(
         status_code=500,
         content={"success": False, "message": "Error interno del servidor"},

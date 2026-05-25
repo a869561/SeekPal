@@ -18,6 +18,7 @@ inicializan los modelos de Docling (~2 GB descargados en primera ejecucion).
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -28,12 +29,14 @@ from app.services.rag.types import ExtractedDoc
 if TYPE_CHECKING:
     from docling.document_converter import DocumentConverter
 
+logger = logging.getLogger("seekpal.docling")
+
 
 def _load_converter() -> "DocumentConverter":
     from docling.document_converter import DocumentConverter
-    print("[seekpal] Docling: cargando modelos de layout (DocLayNet)...")
+    logger.info("Docling: cargando modelos de layout (DocLayNet)...")
     converter = DocumentConverter()
-    print("[seekpal] Docling: listo")
+    logger.info("Docling: listo")
     return converter
 
 

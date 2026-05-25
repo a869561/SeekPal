@@ -15,9 +15,11 @@ pueden usarlo igual porque la fabrica devuelve cualquier objeto.
 
 from __future__ import annotations
 
+import logging
 from threading import Lock
 from typing import Callable, Generic, TypeVar
 
+logger = logging.getLogger("seekpal.lazy")
 
 T = TypeVar("T")
 
@@ -49,7 +51,7 @@ class LazyService(Generic[T]):
             try:
                 self._instance = self._factory()
             except Exception as exc:  # noqa: BLE001
-                print(f"[seekpal] {self._name}: error al inicializar — {exc}")
+                logger.warning("%s: error al inicializar — %s", self._name, exc)
                 self._disabled = True
                 return None
         return self._instance
