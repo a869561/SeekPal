@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from app.services.rag.extractors.audio import AudioExtractor
 from app.services.rag.extractors.base import BaseExtractor
 from app.services.rag.extractors.doc import DocExtractor
 from app.services.rag.extractors.docx import DocxExtractor
 from app.services.rag.extractors.epub import EpubExtractor
+from app.services.rag.extractors.image import ImageExtractor
 from app.services.rag.extractors.odp import OdpExtractor
 from app.services.rag.extractors.ods import OdsExtractor
 from app.services.rag.extractors.odt import OdtExtractor
@@ -14,6 +16,7 @@ from app.services.rag.extractors.ppt import PptExtractor
 from app.services.rag.extractors.pptx import PptxExtractor
 from app.services.rag.extractors.rtf import RtfExtractor
 from app.services.rag.extractors.text import TextExtractor, is_text_file
+from app.services.rag.extractors.video import VideoExtractor
 from app.services.rag.extractors.xlsx import XlsxExtractor
 
 
@@ -36,6 +39,9 @@ _EXTRACTORS: list[BaseExtractor] = [
     XlsxExtractor(),
     RtfExtractor(),
     EpubExtractor(),
+    AudioExtractor(),
+    ImageExtractor(),
+    VideoExtractor(),
 ]
 
 _EXTENSION_MAP: dict[str, BaseExtractor] = {

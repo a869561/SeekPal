@@ -192,6 +192,11 @@ async def _index_text_documents(
     embedding batch y guardado en Qdrant+MongoDB. Emitir progreso entre
     grupos permite al usuario ver avance cada ~40 ficheros y habilita
     el punto de pausa entre grupos.
+
+    Categorías indexadas: text + document (extracción directa) y
+    image/audio/video (extracción multimedia via Whisper / RapidOCR /
+    Moondream del perfil MVP). El nombre de la función se mantiene por
+    compatibilidad histórica aunque ya cubre todos los tipos indexables.
     """
     from beanie.operators import In
 
@@ -205,7 +210,7 @@ async def _index_text_documents(
 
     query = FileDoc.find(
         FileDoc.sourceId == source_id,
-        In(FileDoc.category, ["text", "document"]),
+        In(FileDoc.category, ["text", "document", "image", "audio", "video"]),
     )
     files = await query.to_list()
     total = len(files)
@@ -216,7 +221,18 @@ async def _index_text_documents(
     from app.services.rag.index_service import PreparedFile
 
     semaphore = asyncio.Semaphore(CONCURRENCY)
-    _EXTRACT_TIMEOUT = 45.0  # seconds per file before giving up
+    # text/document son fast-path; multimedia requiere mucho mas tiempo:
+    # transcripcion de audio ~real-time, video aun mas (audio + N captions).
+    _EXTRACT_TIMEOUT_TEXT = 45.0
+    _EXTRACT_TIMEOUT_AUDIO = 600.0   # 10 min/audio
+    _EXTRACT_TIMEOUT_IMAGE = 120.0   # 2 min/imagen (OCR + caption Moondream)
+    _EXTRACT_TIMEOUT_VIDEO = 1800.0  # 30 min/video
+
+    def _timeout_for(cat: str) -> float:
+        if cat == "audio": return _EXTRACT_TIMEOUT_AUDIO
+        if cat == "image": return _EXTRACT_TIMEOUT_IMAGE
+        if cat == "video": return _EXTRACT_TIMEOUT_VIDEO
+        return _EXTRACT_TIMEOUT_TEXT
 
     async def _prepare(file_doc):
         async with semaphore:
@@ -230,7 +246,7 @@ async def _index_text_documents(
                         extension=file_doc.extension,
                         path=Path(file_doc.path),
                     ),
-                    timeout=_EXTRACT_TIMEOUT,
+                    timeout=_timeout_for(file_doc.category),
                 )
             except asyncio.TimeoutError:
                 return PreparedFile(
