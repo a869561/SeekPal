@@ -122,6 +122,8 @@ async def connect_database() -> None:
         vector=_vector_service,
         reranker=_reranker_service,
         reranker_multiplier=settings.rag_reranker_multiplier,
+        mmr_enabled=settings.rag_mmr_enabled,
+        mmr_lambda=settings.rag_mmr_lambda,
     )
 
     _generation_service = GenerationService(

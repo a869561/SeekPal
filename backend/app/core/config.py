@@ -35,6 +35,13 @@ class Settings(BaseSettings):
     # Vector search devuelve top_k * multiplier y el reranker filtra a top_k.
     rag_reranker_multiplier: int = 3
 
+    # MMR (Maximum Marginal Relevance): tras retrieval+rerank, reordena el
+    # top_k para diversificar — evita que sean todos del mismo fichero.
+    # lambda=1 -> solo relevancia (no diversifica), 0 -> solo diversidad.
+    # 0.7 es el balance estandar de la literatura (Carbonell & Goldstein 1998).
+    rag_mmr_enabled: bool = True
+    rag_mmr_lambda: float = 0.7
+
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=False, extra="ignore")
 
 
