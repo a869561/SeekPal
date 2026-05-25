@@ -134,22 +134,45 @@ set "_gpu_setup=%temp%\seekpal_gpu_%random%.ps1"
 
 (
     echo $pip = '%_pip%'
+    echo $prefFile = '%_backdir%\.provider_preference'
+    echo $userPref = if ^(Test-Path $prefFile^) { ^(Get-Content $prefFile -Raw^).Trim^(^).ToLower^(^) } else { 'auto' }
     echo $gpuNames = try { ^(Get-WmiObject Win32_VideoController^).Name -join '^|' } catch { '' }
     echo $hasNVIDIA   = $gpuNames -imatch 'NVIDIA'
     echo $hasAMDdedic = $gpuNames -imatch 'Radeon RX^|Radeon Pro^|Radeon HD'
     echo $hasAMDiGPU  = $gpuNames -imatch 'Radeon Graphics^|Radeon Vega'
     echo $hasIntelArc = $gpuNames -imatch 'Intel Arc'
     echo $hasIntelIGPU= $gpuNames -imatch 'Intel UHD^|Intel HD^|Intel Iris'
-    echo if ^($hasNVIDIA^) {
-    echo     $vram = try { ^(Get-WmiObject Win32_VideoController ^| Where-Object { $_.Name -imatch 'NVIDIA' } ^| Measure-Object AdapterRAM -Maximum^).Maximum } catch { 0 }
-    echo     if ^($vram -ge 2147483648^) {
-    echo         $h = ^(^& $pip show onnxruntime-gpu 2^>$null^) -ne $null
-    echo         if ^(-not $h^) { Write-Host '  Instalando aceleracion NVIDIA...'; ^& $pip install onnxruntime-gpu --quiet 2^>^&1 ^| Out-Null }
-    echo     } else { Write-Host '  Graficos NVIDIA con poca VRAM, usando procesador.' }
-    echo } elseif ^($hasAMDdedic -or $hasIntelArc -or $hasAMDiGPU -or $hasIntelIGPU^) {
-    echo     $h = ^(^& $pip show onnxruntime-directml 2^>$null^) -ne $null
-    echo     if ^(-not $h^) { Write-Host '  Instalando aceleracion AMD/Intel...'; ^& $pip install onnxruntime-directml --quiet 2^>^&1 ^| Out-Null }
-    echo } else { Write-Host '  Sin graficos dedicados, usando procesador.' }
+    echo if ^($userPref -eq 'cpu' -or $userPref -eq 'cuda' -or $userPref -eq 'directml'^) {
+    echo     $want = $userPref
+    echo     Write-Host "  Provider configurado por usuario: $want"
+    echo } else {
+    echo     $want = 'cpu'
+    echo     if ^($hasNVIDIA^) {
+    echo         $vram = try { ^(Get-WmiObject Win32_VideoController ^| Where-Object { $_.Name -imatch 'NVIDIA' } ^| Measure-Object AdapterRAM -Maximum^).Maximum } catch { 0 }
+    echo         if ^($vram -ge 2147483648^) { $want = 'cuda' } else { Write-Host '  GPU NVIDIA con poca VRAM, usando procesador.' }
+    echo     } elseif ^($hasAMDdedic -or $hasIntelArc -or $hasAMDiGPU -or $hasIntelIGPU^) {
+    echo         $want = 'directml'
+    echo     }
+    echo }
+    echo ^& $pip show onnxruntime-gpu      *^>$null; $hasGpu    = ^($LASTEXITCODE -eq 0^)
+    echo ^& $pip show onnxruntime-directml *^>$null; $hasDml    = ^($LASTEXITCODE -eq 0^)
+    echo ^& $pip show nvidia-cublas-cu12   *^>$null; $hasCublas = ^($LASTEXITCODE -eq 0^)
+    echo ^& $pip show nvidia-cudnn-cu12    *^>$null; $hasCudnn  = ^($LASTEXITCODE -eq 0^)
+    echo ^& $pip show nvidia-cufft-cu12    *^>$null; $hasCufft  = ^($LASTEXITCODE -eq 0^)
+    echo if ^($want -eq 'cuda'^) {
+    echo     if ^($hasDml^) { Write-Host '  Quitando aceleracion DirectML...'; ^& $pip uninstall -y onnxruntime-directml *^>$null }
+    echo     if ^(-not ^($hasCublas -and $hasCudnn -and $hasCufft^)^) {
+    echo         Write-Host '  Instalando runtime CUDA ^(~1.9 GB, una sola vez^)...'
+    echo         ^& $pip install nvidia-cublas-cu12 nvidia-cuda-runtime-cu12 nvidia-cuda-nvrtc-cu12 nvidia-cudnn-cu12 nvidia-cufft-cu12 nvidia-curand-cu12 nvidia-cusparse-cu12 nvidia-nvjitlink-cu12 --quiet *^>$null
+    echo     }
+    echo     if ^(-not $hasGpu^) { Write-Host '  Instalando aceleracion NVIDIA ^(CUDA^)...'; ^& $pip install onnxruntime-gpu --quiet *^>$null }
+    echo } elseif ^($want -eq 'directml'^) {
+    echo     if ^($hasGpu^) { Write-Host '  Quitando aceleracion NVIDIA no usada...'; ^& $pip uninstall -y onnxruntime-gpu *^>$null }
+    echo     if ^(-not $hasDml^) { Write-Host '  Instalando aceleracion GPU ^(DirectML^)...'; ^& $pip install onnxruntime-directml --quiet *^>$null }
+    echo } else {
+    echo     if ^($hasGpu^) { Write-Host '  Quitando aceleracion NVIDIA no usada...'; ^& $pip uninstall -y onnxruntime-gpu *^>$null }
+    echo     if ^($hasDml^) { Write-Host '  Quitando aceleracion DirectML no usada...'; ^& $pip uninstall -y onnxruntime-directml *^>$null }
+    echo }
 ) > "%_gpu_setup%"
 powershell -noprofile -ExecutionPolicy Bypass -File "%_gpu_setup%" 2>nul
 del "%_gpu_setup%" >nul 2>&1
@@ -159,7 +182,7 @@ set "_emb_flag=%~dp0backend\.models_embedding_ready"
 if not exist "%_emb_flag%" (
     echo.
     echo       Descargando modelos de busqueda ^(primera vez, ~2 GB, varios minutos^)...
-    "%_py%" -W ignore -c "from fastembed import TextEmbedding, SparseTextEmbedding; TextEmbedding(model_name='intfloat/multilingual-e5-large'); SparseTextEmbedding(model_name='Qdrant/bm25'); print('  Modelos listos')"
+    "%_py%" -W ignore -c "import os,sys; from pathlib import Path; _nv=Path(sys.executable).parent.parent/'Lib'/'site-packages'/'nvidia'; _dirs=[str(p/'bin') for p in (_nv.iterdir() if _nv.exists() else []) if (p/'bin').exists()]; [os.add_dll_directory(d) for d in _dirs]; os.environ['PATH']=os.pathsep.join(_dirs)+os.pathsep+os.environ.get('PATH',''); from fastembed import TextEmbedding, SparseTextEmbedding; TextEmbedding(model_name='intfloat/multilingual-e5-large'); SparseTextEmbedding(model_name='Qdrant/bm25'); print('  Modelos listos')"
     echo done > "%_emb_flag%"
     <nul set /p "_=  [6/7] Preparando IA..."
 )

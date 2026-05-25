@@ -60,8 +60,9 @@ start.ps1
 qdrant_data/
 backend/qdrant_data/
 
-# Ollama models flag
-backend/.models_pulled
+# Flags de estado del backend (modelos descargados, preferencia provider IA)
+backend/.models_*
+backend/.provider_preference
 
 # Pytest
 .pytest_cache/

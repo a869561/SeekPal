@@ -1,9 +1,14 @@
 from fastapi import APIRouter, BackgroundTasks, Depends
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 from app.core.responses import APIError, ok
 from app.deps.auth import require_auth
 from app.services import system_service
+
+
+class SetProviderRequest(BaseModel):
+    provider: str  # auto | cpu | cuda | directml
 
 
 router = APIRouter(prefix="/api/system", tags=["system"], dependencies=[Depends(require_auth)])
@@ -55,9 +60,12 @@ async def hardware_info():
         "ram_gb": hw["ram_gb"],
         "gpus": hw["gpus"],
         "active_provider": active_provider,
+        "active_provider_id": system_service.active_provider_id(active_provider),
         "active_label": active_label,
         "active_gpu_index": gpu_index,  # None si usa CPU
         "recommendation": recommendation,
+        "available_providers": system_service.available_providers(hw["gpus"]),
+        "preference": system_service.get_provider_preference(),  # auto | cpu | cuda | directml
     })
 
 
@@ -81,6 +89,36 @@ async def enable_gpu(background_tasks: BackgroundTasks):
 
     background_tasks.add_task(system_service.install_gpu_package, pkg)
     return ok({"status": "installing", "package": pkg})
+
+
+@router.post("/set-provider")
+async def set_provider(body: SetProviderRequest, background_tasks: BackgroundTasks):
+    """Cambia el motor IA: auto | cpu | cuda | directml.
+
+    Guarda la preferencia (start.bat la respeta en arranques futuros),
+    instala/desinstala paquetes y reinicia SeekPal.
+    """
+    current = system_service.get_install_status()
+    if current["status"] == "installing":
+        raise APIError("Ya hay un cambio en progreso", status_code=409)
+
+    target = body.provider.lower()
+    if target not in {"auto", "cpu", "cuda", "directml"}:
+        raise APIError(f"Provider no válido: {target}", status_code=400)
+
+    # Si el target requiere hardware especifico, validar
+    if target in {"cuda", "directml"}:
+        hw = await system_service.detect_hardware()
+        providers = system_service.available_providers(hw["gpus"])
+        chosen = next((p for p in providers if p["id"] == target), None)
+        if not chosen or not chosen["available"]:
+            raise APIError(
+                chosen["reason"] if chosen else f"Provider {target} no disponible",
+                status_code=400,
+            )
+
+    background_tasks.add_task(system_service.switch_provider, target)
+    return ok({"status": "installing", "target": target})
 
 
 @router.post("/restart")

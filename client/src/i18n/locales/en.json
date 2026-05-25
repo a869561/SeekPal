@@ -38,9 +38,15 @@
     "applying":       "Applying changes…",
     "done":           "✅ GPU acceleration active",
     "error":          "Error during activation. Try restarting SeekPal manually.",
-    "indexingWarning":"SeekPal is currently indexing files. Pause the indexing and activate GPU acceleration now?",
-    "pauseAndApply":  "Pause and activate",
-    "wait":           "Wait"
+    "indexingWarning":"SeekPal is currently indexing files. Pause the indexing and apply changes?",
+    "pauseAndApply":  "Pause and apply",
+    "wait":           "Wait",
+    "refresh":        "Refresh",
+    "selectEngine":   "Processing engine",
+    "autoOption":     "Automatic (recommended)",
+    "autoHint":       "Detects the best engine for your hardware on each startup.",
+    "applyButton":    "Apply and restart",
+    "providerApplied":"✅ AI engine updated"
   },
   "theme": {
     "title": "Theme",

@@ -38,9 +38,15 @@
     "applying":       "Aplicando cambios…",
     "done":           "✅ Aceleración GPU activada",
     "error":          "Error durante la activación. Reinicia SeekPal manualmente.",
-    "indexingWarning":"SeekPal está indexando archivos ahora mismo. ¿Pausar la indexación y activar la aceleración GPU?",
-    "pauseAndApply":  "Pausar y activar",
-    "wait":           "Esperar"
+    "indexingWarning":"SeekPal está indexando archivos ahora mismo. ¿Pausar la indexación y aplicar los cambios?",
+    "pauseAndApply":  "Pausar y aplicar",
+    "wait":           "Esperar",
+    "refresh":        "Refrescar",
+    "selectEngine":   "Motor de procesamiento",
+    "autoOption":     "Automático (recomendado)",
+    "autoHint":       "Detecta el mejor motor según tu hardware en cada arranque.",
+    "applyButton":    "Aplicar y reiniciar",
+    "providerApplied":"✅ Motor IA actualizado"
   },
   "theme": {
     "title": "Tema",

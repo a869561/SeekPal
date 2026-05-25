@@ -14,18 +14,84 @@ el texto por la mitad hasta que funcione o sea demasiado corto.
 from __future__ import annotations
 
 import asyncio
+import os
 import re
+import sys
 import unicodedata
+from pathlib import Path
 
-import numpy as np
-from fastembed import SparseTextEmbedding, TextEmbedding
-from qdrant_client.http.models import SparseVector
+
+def _setup_cuda_pip_dlls() -> None:
+    """Anade al DLL search path los binarios de los paquetes pip nvidia-*.
+
+    Permite que ONNX Runtime cargue cublasLt64_12.dll, cudnn64_9.dll, etc.
+    desde wheels (nvidia-cublas-cu12, nvidia-cudnn-cu12, ...) sin necesidad
+    de tener CUDA Toolkit instalado a nivel de sistema.
+
+    Hace dos cosas porque add_dll_directory solo afecta a DLLs cargadas por
+    Python (no a dependencias transitivas que carga el codigo C++ de ONNX):
+      1. os.add_dll_directory(...)  -> para DLLs que Python carga directamente
+      2. prepend a $env:PATH         -> para que el loader de Windows resuelva
+                                        dependencias transitivas (cublas64_12,
+                                        cufft64_11, etc.) al cargar
+                                        onnxruntime_providers_cuda.dll
+
+    Debe ejecutarse ANTES de importar fastembed/onnxruntime.
+    """
+    if os.name != "nt":
+        return
+    try:
+        nvdir = Path(sys.executable).parent.parent / "Lib" / "site-packages" / "nvidia"
+        if not nvdir.exists():
+            return
+        bin_dirs: list[str] = []
+        for sub in nvdir.iterdir():
+            bin_dir = sub / "bin"
+            if bin_dir.exists():
+                bin_dirs.append(str(bin_dir))
+                try:
+                    os.add_dll_directory(str(bin_dir))
+                except (OSError, FileNotFoundError):
+                    pass
+        if bin_dirs:
+            os.environ["PATH"] = os.pathsep.join(bin_dirs) + os.pathsep + os.environ.get("PATH", "")
+    except Exception:
+        pass
+
+
+_setup_cuda_pip_dlls()
+
+import numpy as np  # noqa: E402
+from fastembed import SparseTextEmbedding, TextEmbedding  # noqa: E402
+from qdrant_client.http.models import SparseVector  # noqa: E402
 
 _CTRL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f�]")
 _MIN_SPLIT_CHARS = 80
 
-# Providers en orden de prioridad: GPU NVIDIA > GPU AMD/Intel (DirectML) > CPU
-_PROVIDERS = ["CUDAExecutionProvider", "DirectMLExecutionProvider", "CPUExecutionProvider"]
+
+def _cuda_runtime_available() -> bool:
+    """True si las DLLs de CUDA 12 runtime estan cargables (system o pip).
+
+    Despues de _setup_cuda_pip_dlls() esta comprobacion encuentra tambien las
+    DLLs que vienen de los paquetes pip nvidia-* (no solo del CUDA Toolkit).
+    """
+    if os.name != "nt":
+        return True  # Linux/Mac: confiar en LD_LIBRARY_PATH
+    import ctypes
+    try:
+        ctypes.WinDLL("cublasLt64_12.dll")
+        return True
+    except (OSError, AttributeError):
+        return False
+
+
+# Providers en orden de prioridad: GPU NVIDIA > GPU AMD/Intel (DirectML) > CPU.
+# CUDA solo se ofrece si las DLLs estan disponibles para evitar errores
+# ruidosos de ONNX Runtime cuando onnxruntime-gpu esta instalado sin CUDA Toolkit.
+_PROVIDERS: list[str] = []
+if _cuda_runtime_available():
+    _PROVIDERS.append("CUDAExecutionProvider")
+_PROVIDERS.extend(["DirectMLExecutionProvider", "CPUExecutionProvider"])
 
 
 def _sanitize(text: str) -> str:

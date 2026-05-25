@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Cpu, MemoryStick, Monitor, CheckCircle, AlertCircle, Loader2, RefreshCw, Zap } from "lucide-react";
-import { getHardwareInfo, getInstallStatus, enableGpu, restartApp } from "../../api/system.js";
+import {
+  getHardwareInfo, getInstallStatus, setProvider, restartApp, invalidateHardwareCache,
+} from "../../api/system.js";
 
-// Icono de tarjeta gráfica (lucide no tiene uno específico, usamos Monitor con variante)
+// Icono de tarjeta gráfica (lucide no tiene uno específico)
 const GpuIcon = ({ className }) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
        strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -17,25 +19,29 @@ export default function HardwareCard() {
   const { t } = useTranslation();
   const [hw, setHw] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [installState, setInstallState] = useState("idle"); // idle | installing | done | error | restarting
+  const [refreshing, setRefreshing] = useState(false);
+  const [selectedPref, setSelectedPref] = useState("auto");
+  const [installState, setInstallState] = useState("idle"); // idle | installing | restarting | done | error
   const [showRestartConfirm, setShowRestartConfirm] = useState(false);
+  const [pendingTarget, setPendingTarget] = useState(null);
 
-  const fetchHardware = useCallback(async () => {
+  const fetchHardware = useCallback(async (force = false) => {
+    if (force) setRefreshing(true);
     try {
-      const data = await getHardwareInfo();
+      const data = await getHardwareInfo(force);
       setHw(data);
+      setSelectedPref(data.preference || "auto");
     } catch {
-      // Ignorar errores de red — la card simplemente no muestra datos
+      // Errores de red: la card no muestra datos
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
-  useEffect(() => {
-    fetchHardware();
-  }, [fetchHardware]);
+  useEffect(() => { fetchHardware(false); }, [fetchHardware]);
 
-  // Polling del estado de instalación cuando está en progreso
+  // Polling del estado de instalación cuando hay un cambio en curso
   useEffect(() => {
     if (installState !== "installing") return;
     const interval = setInterval(async () => {
@@ -44,7 +50,6 @@ export default function HardwareCard() {
         if (status.status === "done") {
           setInstallState("restarting");
           clearInterval(interval);
-          // SeekPal se reinicia solo; esperar a que vuelva
           waitForRestart();
         } else if (status.status === "error") {
           setInstallState("error");
@@ -55,14 +60,16 @@ export default function HardwareCard() {
     return () => clearInterval(interval);
   }, [installState]);
 
-  // Espera a que el backend vuelva tras reinicio
+  // Espera a que el backend vuelva tras reinicio (exit 99 + relaunch de start.bat)
   const waitForRestart = async () => {
     await new Promise((r) => setTimeout(r, 2000));
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 60; i++) {
       try {
-        await getHardwareInfo();
+        invalidateHardwareCache();
+        await getHardwareInfo(true);
         setInstallState("done");
-        await fetchHardware();
+        await fetchHardware(true);
+        setTimeout(() => setInstallState("idle"), 3000);
         return;
       } catch {
         await new Promise((r) => setTimeout(r, 1000));
@@ -71,14 +78,14 @@ export default function HardwareCard() {
     setInstallState("error");
   };
 
-  // Arrancar instalación GPU
-  const handleEnableGpu = async () => {
+  const applyPreference = async (target, force = false) => {
+    setPendingTarget(target);
     setInstallState("installing");
     try {
-      await enableGpu();
+      await setProvider(target);
     } catch (err) {
-      if (err.response?.status === 409) {
-        // Ingesta activa — mostrar confirmación de reinicio
+      if (err.response?.status === 409 && !force) {
+        // Posible ingesta activa: mostrar confirmación
         setShowRestartConfirm(true);
         setInstallState("idle");
       } else {
@@ -87,7 +94,8 @@ export default function HardwareCard() {
     }
   };
 
-  // Reiniciar (después de instalar manualmente)
+  const handleApply = () => applyPreference(selectedPref);
+
   const handleRestart = async (force = false) => {
     setShowRestartConfirm(false);
     setInstallState("restarting");
@@ -119,18 +127,37 @@ export default function HardwareCard() {
 
   const isGpuActive = hw.active_provider !== "CPUExecutionProvider";
   const hasGpu = hw.gpus && hw.gpus.length > 0;
+  const currentPref = hw.preference || "auto";
+  const hasChanges = selectedPref !== currentPref;
+  const busy = installState === "installing" || installState === "restarting";
+
+  // Lista para el selector: Auto + cada provider de la API
+  const providers = hw.available_providers || [];
+  const selectorOptions = [
+    { id: "auto", label: t("hardware.autoOption"), available: true, reason: null },
+    ...providers,
+  ];
 
   return (
     <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
-      {/* Cabecera */}
-      <div className="flex items-center gap-2 mb-5">
-        <Zap size={18} className="text-indigo-500" />
-        <h2 className="font-semibold text-slate-800 dark:text-slate-100">{t("hardware.title")}</h2>
+      {/* Cabecera con botón refrescar */}
+      <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center gap-2">
+          <Zap size={18} className="text-indigo-500" />
+          <h2 className="font-semibold text-slate-800 dark:text-slate-100">{t("hardware.title")}</h2>
+        </div>
+        <button
+          onClick={() => fetchHardware(true)}
+          disabled={refreshing || busy}
+          title={t("hardware.refresh")}
+          className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-950 transition disabled:opacity-40"
+        >
+          <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
+        </button>
       </div>
 
       {/* Lista de componentes */}
       <div className="space-y-2 mb-5">
-        {/* CPU */}
         <div className="flex items-start gap-3">
           <Cpu size={16} className="text-slate-400 mt-0.5 shrink-0" />
           <div>
@@ -139,7 +166,6 @@ export default function HardwareCard() {
           </div>
         </div>
 
-        {/* RAM */}
         <div className="flex items-start gap-3">
           <MemoryStick size={16} className="text-slate-400 mt-0.5 shrink-0" />
           <div>
@@ -148,7 +174,6 @@ export default function HardwareCard() {
           </div>
         </div>
 
-        {/* GPUs */}
         {hw.gpus && hw.gpus.map((gpu, i) => (
           <div key={i} className="flex items-start gap-3">
             <GpuIcon className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
@@ -169,7 +194,7 @@ export default function HardwareCard() {
         )}
       </div>
 
-      {/* Estado de procesamiento IA */}
+      {/* Estado actual */}
       <div className={`rounded-xl p-3 mb-4 flex items-center gap-3 ${
         isGpuActive
           ? "bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800"
@@ -200,11 +225,43 @@ export default function HardwareCard() {
         </div>
       </div>
 
-      {/* Botón de acción */}
+      {/* Selector de provider */}
+      <div className="mb-3">
+        <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-2">
+          {t("hardware.selectEngine")}
+        </label>
+        <select
+          value={selectedPref}
+          disabled={busy}
+          onChange={(e) => setSelectedPref(e.target.value)}
+          className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-50"
+        >
+          {selectorOptions.map((opt) => (
+            <option key={opt.id} value={opt.id} disabled={!opt.available}>
+              {opt.label}{!opt.available && opt.reason ? ` — ${opt.reason}` : ""}
+            </option>
+          ))}
+        </select>
+        {selectedPref === "auto" && (
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1.5">{t("hardware.autoHint")}</p>
+        )}
+      </div>
+
+      {/* Botón Aplicar */}
+      {installState === "idle" && hasChanges && (
+        <button
+          onClick={handleApply}
+          className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-medium transition"
+        >
+          <Zap size={15} />
+          {t("hardware.applyButton")}
+        </button>
+      )}
+
       {installState === "installing" && (
         <div className="flex items-center gap-2 text-sm text-indigo-600 dark:text-indigo-400">
           <Loader2 size={15} className="animate-spin" />
-          {t("hardware.downloading")}
+          {pendingTarget === "auto" ? t("hardware.applying") : t("hardware.downloading")}
         </div>
       )}
 
@@ -218,7 +275,7 @@ export default function HardwareCard() {
       {installState === "done" && (
         <div className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400">
           <CheckCircle size={15} />
-          {t("hardware.done")}
+          {t("hardware.providerApplied")}
         </div>
       )}
 
@@ -229,17 +286,7 @@ export default function HardwareCard() {
         </div>
       )}
 
-      {installState === "idle" && !isGpuActive && hasGpu && hw.recommendation && (
-        <button
-          onClick={handleEnableGpu}
-          className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-medium transition"
-        >
-          <Zap size={15} />
-          {t("hardware.enableGpu")}
-        </button>
-      )}
-
-      {/* Modal de confirmación si hay indexación activa */}
+      {/* Confirmación si hay indexación activa */}
       {showRestartConfirm && (
         <div className="mt-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-700 rounded-xl p-4">
           <p className="text-sm text-amber-800 dark:text-amber-300 mb-3">{t("hardware.indexingWarning")}</p>
