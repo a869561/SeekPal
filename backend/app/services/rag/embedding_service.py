@@ -69,6 +69,36 @@ _CTRL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f�]")
 _MIN_SPLIT_CHARS = 80
 
 
+def _detect_active_provider(model_obj: object) -> str:
+    """Inspecciona el modelo FastEmbed para detectar que ONNX provider esta usando.
+
+    FastEmbed envuelve InferenceSession en varias capas (TextEmbedding ->
+    OnnxTextEmbedding -> InferenceSession, TextCrossEncoder ->
+    OnnxTextCrossEncoder -> InferenceSession). Busca recursivamente hasta
+    encontrar un objeto con get_providers().
+    """
+    visited: set[int] = set()
+    candidates = [model_obj]
+    while candidates:
+        obj = candidates.pop(0)
+        if id(obj) in visited:
+            continue
+        visited.add(id(obj))
+        if hasattr(obj, "get_providers"):
+            try:
+                providers = obj.get_providers()
+                if providers:
+                    return providers[0]
+            except Exception:
+                pass
+        # Buscar atributos comunes de wrapping en FastEmbed
+        for attr in ("model", "_model", "session", "_session", "ort_session"):
+            inner = getattr(obj, attr, None)
+            if inner is not None and id(inner) not in visited:
+                candidates.append(inner)
+    return "CPUExecutionProvider"
+
+
 def _cuda_runtime_available() -> bool:
     """True si las DLLs de CUDA 12 runtime estan cargables (system o pip).
 
@@ -114,16 +144,7 @@ class EmbeddingService:
                 self._model = TextEmbedding(model_name=model)
         self._batch_size = batch_size
         # Detectar provider activo para logging y system/info endpoint
-        self.active_provider: str = "CPUExecutionProvider"
-        try:
-            session = getattr(self._model, "_model", None) or getattr(self._model, "model", None)
-            if session is not None:
-                inner = getattr(session, "_model", None) or getattr(session, "model", session)
-                providers_list = inner.get_providers()
-                if providers_list:
-                    self.active_provider = providers_list[0]
-        except Exception:
-            pass
+        self.active_provider = _detect_active_provider(self._model)
         _LABEL = {
             "CUDAExecutionProvider": "NVIDIA GPU (CUDA)",
             "DirectMLExecutionProvider": "AMD/Intel GPU (DirectML)",
@@ -210,3 +231,51 @@ class SparseEmbeddingService:
     async def embed_query(self, text: str) -> SparseVector:
         results = await asyncio.to_thread(self._embed_sync, [_sanitize(text)])
         return results[0]
+
+
+class RerankerService:
+    """Cross-encoder reranker via FastEmbed (BGE-reranker-v2-m3 por defecto).
+
+    Se usa despues del retrieval inicial: el hybrid search devuelve top_k * N
+    candidatos, el reranker los reordena con un cross-encoder mas preciso y
+    nos quedamos con los top_k mejores. +5-10pp recall@k segun el informe.
+
+    Usa los mismos providers ONNX (CUDA/DirectML/CPU) que TextEmbedding.
+    El modelo se carga en __init__ — coste fijo de arranque ~1s en GPU, ~3s
+    en CPU. Tamano: BAAI/bge-reranker-v2-m3 ~570 MB.
+    """
+
+    def __init__(self, model: str) -> None:
+        import warnings
+        try:
+            from fastembed.rerank.cross_encoder import TextCrossEncoder
+        except ImportError:
+            try:
+                from fastembed import TextCrossEncoder  # type: ignore
+            except ImportError as exc:
+                raise RuntimeError(
+                    f"FastEmbed no expone TextCrossEncoder en esta version: {exc}"
+                ) from exc
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            try:
+                self._model = TextCrossEncoder(model_name=model, providers=_PROVIDERS)
+            except Exception:
+                self._model = TextCrossEncoder(model_name=model)
+        self._model_name = model
+        self.active_provider = _detect_active_provider(self._model)
+        label = {
+            "CUDAExecutionProvider": "NVIDIA GPU (CUDA)",
+            "DirectMLExecutionProvider": "AMD/Intel GPU (DirectML)",
+            "CPUExecutionProvider": "CPU",
+        }.get(self.active_provider, self.active_provider)
+        print(f"[seekpal] FastEmbed reranker: {model} -> {label}")
+
+    def _rerank_sync(self, query: str, passages: list[str]) -> list[float]:
+        # TextCrossEncoder.rerank devuelve un generador de floats en el mismo orden
+        return [float(s) for s in self._model.rerank(query, passages)]
+
+    async def rerank(self, query: str, passages: list[str]) -> list[float]:
+        if not passages:
+            return []
+        return await asyncio.to_thread(self._rerank_sync, _sanitize(query), passages)

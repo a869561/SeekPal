@@ -25,6 +25,16 @@ class Settings(BaseSettings):
     rag_top_k: int = 10
     rag_embed_batch: int = 8
 
+    # Reranker (cross-encoder sobre el top-k inicial del hybrid search).
+    # Eleva recall@k +5-10pp segun informe v3 §10.1 (perfil Calidad).
+    # FastEmbed 0.8 no expone bge-reranker-v2-m3 todavia, asi que usamos
+    # jina-reranker-v2 multilingue (~280 MB) como mejor alternativa.
+    rag_reranker_enabled: bool = True
+    rag_reranker_model: str = "jinaai/jina-reranker-v2-base-multilingual"
+    # Multiplicador para sobre-recuperar candidatos antes del rerank.
+    # Vector search devuelve top_k * multiplier y el reranker filtra a top_k.
+    rag_reranker_multiplier: int = 3
+
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=False, extra="ignore")
 
 
