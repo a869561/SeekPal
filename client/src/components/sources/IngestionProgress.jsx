@@ -23,11 +23,15 @@ export default function IngestionProgress({ sourceId, onDone }) {
   const [paused,   setPaused]   = useState(false);
   const [elapsedSec, setElapsedSec] = useState(0);
 
-  const doneRef      = useRef(false);
-  const pollRef      = useRef(null);
-  const startTimeRef = useRef(Date.now());
-  const tickRef      = useRef(null);
+  const doneRef        = useRef(false);
+  const pollRef        = useRef(null);
+  const startTimeRef   = useRef(Date.now());
+  const tickRef        = useRef(null);
   const activePhaseRef = useRef("scanning");
+  // True mientras el componente esta montado. Evita que onloadend arranque
+  // polling huerfano tras un xhr.abort() del cleanup (el polling quedaria
+  // corriendo cada 3s hasta agotar los 400 intentos = ~20 min).
+  const mountedRef     = useRef(true);
 
   useEffect(() => {
     tickRef.current = setInterval(() => {
@@ -61,19 +65,31 @@ export default function IngestionProgress({ sourceId, onDone }) {
   }
 
   useEffect(() => {
+    mountedRef.current = true;
+
     const token = localStorage.getItem("seekpal_token");
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `/api/sources/${sourceId}/ingest`, true);
     xhr.setRequestHeader("Authorization", `Bearer ${token}`);
     xhr.setRequestHeader("Accept", "text/event-stream");
 
-    let buffer = "";
+    // Solo trackear el offset, no copiar el responseText acumulado en una
+    // variable: en ingestas largas (10k+ ficheros, MB de eventos) duplicar
+    // el string en cada onprogress hace crecer la memoria del navegador.
+    let processedLen = 0;
+    let partialLine = "";
 
     xhr.onprogress = () => {
-      const newData = xhr.responseText.slice(buffer.length);
-      buffer = xhr.responseText;
+      const newData = xhr.responseText.slice(processedLen);
+      processedLen = xhr.responseText.length;
 
-      for (const line of newData.split("\n")) {
+      const chunk = partialLine + newData;
+      const lines = chunk.split("\n");
+      // La ultima entrada puede ser una linea incompleta — la guardamos
+      // para concatenar con el siguiente fragmento.
+      partialLine = lines.pop() ?? "";
+
+      for (const line of lines) {
         if (!line.startsWith("data: ")) continue;
         try {
           const ev = JSON.parse(line.slice(6));
@@ -124,6 +140,9 @@ export default function IngestionProgress({ sourceId, onDone }) {
     };
 
     xhr.onloadend = () => {
+      // Si el componente ya se desmonto, no levantar polling: el cleanup del
+      // useEffect dispara xhr.abort() que llega aqui despues de limpiar.
+      if (!mountedRef.current) return;
       if (!doneRef.current) {
         const aiPhases = ["extracting", "embedding", "indexing"];
         setPhase((prev) => (aiPhases.includes(prev) || prev === "processing" ? activePhaseRef.current : prev));
@@ -132,7 +151,11 @@ export default function IngestionProgress({ sourceId, onDone }) {
     };
 
     xhr.send();
-    return () => { xhr.abort(); clearInterval(pollRef.current); };
+    return () => {
+      mountedRef.current = false;
+      xhr.abort();
+      clearInterval(pollRef.current);
+    };
   }, [sourceId]);
 
   async function handlePause() {

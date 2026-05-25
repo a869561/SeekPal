@@ -14,10 +14,11 @@ from __future__ import annotations
 import asyncio
 import os
 from pathlib import Path
-from threading import Lock
 from typing import TYPE_CHECKING
 
 from ollama import AsyncClient
+
+from app.services.rag._lazy import LazyService
 
 if TYPE_CHECKING:
     from rapidocr_onnxruntime import RapidOCR
@@ -31,57 +32,26 @@ _CAPTION_PROMPT = (
     "y cualquier dato util para buscarla mas tarde."
 )
 
-_ocr: "RapidOCR | None" = None
-_ocr_lock = Lock()
-_ocr_disabled = False
 
-_caption_client: AsyncClient | None = None
-_caption_lock = Lock()
-_caption_disabled = False
-
-
-def _get_ocr() -> "RapidOCR | None":
-    global _ocr, _ocr_disabled
-    if _ocr_disabled:
-        return None
-    if _ocr is not None:
-        return _ocr
-    with _ocr_lock:
-        if _ocr is not None:
-            return _ocr
-        try:
-            from rapidocr_onnxruntime import RapidOCR
-            print("[seekpal] OCR: cargando RapidOCR (modelos PaddleOCR)...")
-            _ocr = RapidOCR()
-            print("[seekpal] OCR: listo")
-        except Exception as exc:  # noqa: BLE001
-            print(f"[seekpal] OCR: error al inicializar — {exc}")
-            _ocr_disabled = True
-            return None
-    return _ocr
+def _load_ocr() -> "RapidOCR":
+    from rapidocr_onnxruntime import RapidOCR
+    print("[seekpal] OCR: cargando RapidOCR (modelos PaddleOCR)...")
+    instance = RapidOCR()
+    print("[seekpal] OCR: listo")
+    return instance
 
 
-def _get_caption_client() -> AsyncClient | None:
-    global _caption_client, _caption_disabled
-    if _caption_disabled:
-        return None
-    if _caption_client is not None:
-        return _caption_client
-    with _caption_lock:
-        if _caption_client is not None:
-            return _caption_client
-        try:
-            _caption_client = AsyncClient(host=_OLLAMA_URL, timeout=120.0)
-        except Exception as exc:  # noqa: BLE001
-            print(f"[seekpal] Captioning: error creando cliente Ollama — {exc}")
-            _caption_disabled = True
-            return None
-    return _caption_client
+def _load_caption_client() -> AsyncClient:
+    return AsyncClient(host=_OLLAMA_URL, timeout=120.0)
+
+
+_ocr = LazyService("OCR", _load_ocr)
+_caption = LazyService("Captioning", _load_caption_client)
 
 
 def ocr_image(path: Path) -> str:
     """Extrae texto de una imagen via OCR. Devuelve "" si no hay texto detectado."""
-    engine = _get_ocr()
+    engine = _ocr.get()
     if engine is None:
         return ""
     try:
@@ -97,8 +67,7 @@ def ocr_image(path: Path) -> str:
 
 async def caption_image_async(path: Path) -> str:
     """Genera descripcion en lenguaje natural via Moondream/Ollama."""
-    global _caption_disabled
-    client = _get_caption_client()
+    client = _caption.get()
     if client is None:
         return ""
     try:
@@ -118,7 +87,7 @@ async def caption_image_async(path: Path) -> str:
         model_missing = ("not found" in msg) or ("model" in msg and "pull" in msg)
         if model_missing:
             print(f"[seekpal] Moondream no esta descargado en Ollama: 'ollama pull {_MOONDREAM_MODEL}'")
-            _caption_disabled = True
+            _caption.disable()
         else:
             print(f"[seekpal] Captioning fallo en {path.name}: {exc}")
         return ""

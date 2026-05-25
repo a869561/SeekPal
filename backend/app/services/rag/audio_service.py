@@ -12,10 +12,10 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from threading import Lock
 from typing import TYPE_CHECKING
 
 from app.core import runtime_settings
+from app.services.rag._lazy import LazyService
 
 if TYPE_CHECKING:
     from faster_whisper import WhisperModel
@@ -24,10 +24,6 @@ if TYPE_CHECKING:
 # Defaults if runtime_settings hasn't been loaded yet (e.g. tests).
 # El env var SEEKPAL_WHISPER_MODEL sigue funcionando como override.
 _DEFAULT_LANG = os.getenv("SEEKPAL_WHISPER_LANG", "auto")  # auto = detect
-
-_model: "WhisperModel | None" = None
-_lock = Lock()
-_init_error: str | None = None
 
 
 def _detect_device() -> tuple[str, str]:
@@ -54,32 +50,28 @@ def _detect_device() -> tuple[str, str]:
     return ("cpu", "int8")
 
 
+def _load_whisper() -> "WhisperModel":
+    from faster_whisper import WhisperModel
+    model_name = os.getenv("SEEKPAL_WHISPER_MODEL") or runtime_settings.get(
+        "whisperModel", "small"
+    )
+    device, compute_type = _detect_device()
+    print(f"[seekpal] Whisper: cargando '{model_name}' en {device} ({compute_type})...")
+    instance = WhisperModel(model_name, device=device, compute_type=compute_type)
+    print(f"[seekpal] Whisper: listo")
+    return instance
+
+
+_whisper = LazyService("Whisper", _load_whisper)
+
+
 def get_whisper() -> "WhisperModel | None":
     """Devuelve el modelo Whisper (carga lazy). None si falla la inicializacion.
 
     El nombre del modelo se lee de runtime_settings (override env:
     SEEKPAL_WHISPER_MODEL). Valores validos: tiny | base | small | medium | large.
     """
-    global _model, _init_error
-    if _model is not None:
-        return _model
-    with _lock:
-        if _model is not None:
-            return _model
-        model_name = os.getenv("SEEKPAL_WHISPER_MODEL") or runtime_settings.get(
-            "whisperModel", "small"
-        )
-        try:
-            from faster_whisper import WhisperModel
-            device, compute_type = _detect_device()
-            print(f"[seekpal] Whisper: cargando '{model_name}' en {device} ({compute_type})...")
-            _model = WhisperModel(model_name, device=device, compute_type=compute_type)
-            print(f"[seekpal] Whisper: listo")
-        except Exception as exc:  # noqa: BLE001
-            _init_error = str(exc)
-            print(f"[seekpal] Whisper: error al inicializar — {exc}")
-            return None
-    return _model
+    return _whisper.get()
 
 
 def transcribe(path: Path) -> str:
