@@ -134,12 +134,12 @@ set "_gpu_setup=%temp%\seekpal_gpu_%random%.ps1"
 
 (
     echo $pip = '%_pip%'
-    echo $gpuNames = try { ^(Get-WmiObject Win32_VideoController^).Name -join '|' } catch { '' }
+    echo $gpuNames = try { ^(Get-WmiObject Win32_VideoController^).Name -join '^|' } catch { '' }
     echo $hasNVIDIA   = $gpuNames -imatch 'NVIDIA'
-    echo $hasAMDdedic = $gpuNames -imatch 'Radeon RX\|Radeon Pro\|Radeon HD'
-    echo $hasAMDiGPU  = $gpuNames -imatch 'Radeon Graphics\|Radeon Vega'
+    echo $hasAMDdedic = $gpuNames -imatch 'Radeon RX^|Radeon Pro^|Radeon HD'
+    echo $hasAMDiGPU  = $gpuNames -imatch 'Radeon Graphics^|Radeon Vega'
     echo $hasIntelArc = $gpuNames -imatch 'Intel Arc'
-    echo $hasIntelIGPU= $gpuNames -imatch 'Intel UHD\|Intel HD\|Intel Iris'
+    echo $hasIntelIGPU= $gpuNames -imatch 'Intel UHD^|Intel HD^|Intel Iris'
     echo if ^($hasNVIDIA^) {
     echo     $vram = try { ^(Get-WmiObject Win32_VideoController ^| Where-Object { $_.Name -imatch 'NVIDIA' } ^| Measure-Object AdapterRAM -Maximum^).Maximum } catch { 0 }
     echo     if ^($vram -ge 2147483648^) {
