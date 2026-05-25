@@ -1,7 +1,11 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 from beanie import Document
 from pydantic import BaseModel, Field
+
+
+def _now_utc() -> datetime:
+    return datetime.now(UTC)
 
 
 class UserSettings(BaseModel):
@@ -24,8 +28,8 @@ class UserSettings(BaseModel):
 class Config(Document):
     passwordHash: str
     settings: UserSettings = Field(default_factory=UserSettings)
-    createdAt: datetime = Field(default_factory=datetime.utcnow)
-    updatedAt: datetime = Field(default_factory=datetime.utcnow)
+    createdAt: datetime = Field(default_factory=_now_utc)
+    updatedAt: datetime = Field(default_factory=_now_utc)
 
     class Settings:
         name = "configs"

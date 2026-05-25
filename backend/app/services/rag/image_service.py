@@ -115,7 +115,8 @@ async def caption_image_async(path: Path) -> str:
     except Exception as exc:  # noqa: BLE001
         # Si Ollama no tiene Moondream descargado, deshabilitar para esta sesion
         msg = str(exc).lower()
-        if "not found" in msg or "model" in msg and "pull" in msg:
+        model_missing = ("not found" in msg) or ("model" in msg and "pull" in msg)
+        if model_missing:
             print(f"[seekpal] Moondream no esta descargado en Ollama: 'ollama pull {_MOONDREAM_MODEL}'")
             _caption_disabled = True
         else:

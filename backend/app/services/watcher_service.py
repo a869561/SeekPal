@@ -3,14 +3,28 @@
 Cada fuente con `autoIndex=True` mantiene un Observer escuchando cambios en su
 directorio raíz (recursivo). Los eventos se debounce-ean 10 s para evitar
 ráfagas durante operaciones en cadena (descomprimir, mover, etc.).
+
+Filtros aplicados al evento crudo de watchdog:
+  - Solo created/modified/deleted/moved (no opened/closed/accessed que
+    disparan re-ingestas espurias al abrir un fichero para leerlo).
+  - Excluye ficheros temporales (.tmp, .swp, .crdownload) y placeholders
+    de Office (~$documento.docx) que aparecen y desaparecen mientras
+    el usuario trabaja.
 """
 
 import asyncio
 import threading
+from pathlib import PurePath
 from typing import Optional
 
 from beanie import PydanticObjectId
-from watchdog.events import FileSystemEventHandler
+from watchdog.events import (
+    EVENT_TYPE_CREATED,
+    EVENT_TYPE_DELETED,
+    EVENT_TYPE_MODIFIED,
+    EVENT_TYPE_MOVED,
+    FileSystemEventHandler,
+)
 from watchdog.observers import Observer
 
 from app.models.source import Source
@@ -19,9 +33,34 @@ from app.services.scanner_service import ingest_source
 
 DEBOUNCE_SECONDS = 10.0
 
+# Eventos que cuentan como cambio real del contenido indexable.
+_REAL_CHANGE_EVENTS = frozenset({
+    EVENT_TYPE_CREATED, EVENT_TYPE_MODIFIED,
+    EVENT_TYPE_DELETED, EVENT_TYPE_MOVED,
+})
+
+# Extensiones y prefijos tipicos de ficheros transitorios que no deben
+# disparar re-ingestas (editores, descargas en curso, lockfiles de Office).
+_TEMP_SUFFIXES = frozenset({
+    ".tmp", ".temp", ".swp", ".swx", ".swo", ".part", ".crdownload",
+    ".bak", ".orig",
+})
+_TEMP_PREFIXES = ("~$", ".~lock.", ".#")
+
 _observers: dict[str, Observer] = {}
 _timers: dict[str, threading.Timer] = {}
 _loop: Optional[asyncio.AbstractEventLoop] = None
+
+
+def _is_transient(path: str) -> bool:
+    """True si el path corresponde a un fichero transitorio que debe ignorarse."""
+    p = PurePath(path)
+    name = p.name
+    if name.startswith(_TEMP_PREFIXES):
+        return True
+    if p.suffix.lower() in _TEMP_SUFFIXES:
+        return True
+    return False
 
 
 async def _noop_progress(_c: int, _t: int, _f: str) -> None:
@@ -62,6 +101,14 @@ class _Handler(FileSystemEventHandler):
 
     def on_any_event(self, event):
         if event.is_directory:
+            return
+        # Filtrar eventos espurios: solo reaccionar a cambios reales del
+        # contenido (created/modified/deleted/moved), no a accesos.
+        if event.event_type not in _REAL_CHANGE_EVENTS:
+            return
+        # Ignorar transitorios (Office lock files, .tmp, .crdownload, etc.)
+        path = getattr(event, "dest_path", None) or event.src_path
+        if _is_transient(path):
             return
         self._trigger()
 

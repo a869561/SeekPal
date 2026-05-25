@@ -28,8 +28,24 @@ def test_resolves_odt():
     assert ext.__class__.__name__ == "OdtExtractor"
 
 
+def test_resolves_mp3():
+    ext = get_extractor(".mp3")
+    assert ext.__class__.__name__ == "AudioExtractor"
+
+
+def test_resolves_png():
+    ext = get_extractor(".png")
+    assert ext.__class__.__name__ == "ImageExtractor"
+
+
+def test_resolves_mp4():
+    ext = get_extractor(".mp4")
+    assert ext.__class__.__name__ == "VideoExtractor"
+
+
 def test_returns_none_for_unsupported():
-    result = get_extractor(".mp4")
+    # Extensiones no cubiertas por ningun extractor (ej. binarios opacos)
+    result = get_extractor(".exe")
     assert result is None
 
 
