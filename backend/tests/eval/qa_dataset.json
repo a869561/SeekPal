@@ -1,32 +1,122 @@
 [
   {
-    "question": "¿Qué es SeekPal y para qué sirve?",
-    "expected_files": [],
-    "expected_pages": [],
-    "notes": "Pregunta general sobre el proyecto — adaptar expected_files al README real"
+    "question": "¿Quién creó el lenguaje de programación Python y en qué año se publicó la primera versión?",
+    "expected_files": ["python_lenguaje.md"],
+    "expected_answer_hint": "Guido van Rossum, 1991",
+    "notes": "Markdown — hecho específico: creador + año"
   },
   {
-    "question": "¿Cuáles son los modelos de IA que usa SeekPal?",
-    "expected_files": [],
-    "expected_pages": [],
-    "notes": "Debería recuperar docs sobre arquitectura RAG"
+    "question": "¿Por qué se llama Python el lenguaje de programación?",
+    "expected_files": ["python_lenguaje.md"],
+    "expected_answer_hint": "Monty Python, grupo de comedia británico",
+    "notes": "Markdown — dato contraintuitivo"
   },
   {
-    "question": "¿Cómo se indexan los documentos?",
-    "expected_files": [],
-    "expected_pages": [],
-    "notes": "Proceso de ingesta y chunking"
+    "question": "¿Cuándo terminó el soporte oficial de Python 2?",
+    "expected_files": ["python_lenguaje.md"],
+    "expected_answer_hint": "1 de enero de 2020",
+    "notes": "Markdown — fecha exacta"
   },
   {
-    "question": "¿Qué formatos de archivo admite SeekPal?",
-    "expected_files": [],
-    "expected_pages": [],
-    "notes": "PDF, DOCX, PPTX, TXT, ODT…"
+    "question": "¿Qué diferencia hay entre una lista y una tupla en Python?",
+    "expected_files": ["python_lenguaje.md"],
+    "expected_answer_hint": "lista mutable y ordenada; tupla inmutable y ordenada",
+    "notes": "Markdown — tipos de datos"
   },
   {
-    "question": "¿Cómo funciona la búsqueda semántica?",
-    "expected_files": [],
-    "expected_pages": [],
-    "notes": "Embeddings BGE-M3 + Qdrant"
+    "question": "¿Qué porcentaje de la masa del sistema solar concentra el Sol?",
+    "expected_files": ["sistema_solar.txt"],
+    "expected_answer_hint": "99,86 %",
+    "notes": "TXT — dato numérico específico"
+  },
+  {
+    "question": "¿Cuál es el volcán más alto del sistema solar y en qué planeta está?",
+    "expected_files": ["sistema_solar.txt"],
+    "expected_answer_hint": "Olimpo, Marte, 21 km",
+    "notes": "TXT — hecho astronómico"
+  },
+  {
+    "question": "¿Cuánto tarda la luz del Sol en llegar a la Tierra?",
+    "expected_files": ["sistema_solar.txt"],
+    "expected_answer_hint": "8 minutos y 20 segundos",
+    "notes": "TXT — dato físico preciso"
+  },
+  {
+    "question": "¿Cuántas lunas tiene Saturno y cuál es la más grande?",
+    "expected_files": ["sistema_solar.txt"],
+    "expected_answer_hint": "146 lunas, Titán",
+    "notes": "TXT — dato específico de planeta"
+  },
+  {
+    "question": "¿Quién acuñó el término inteligencia artificial y en qué conferencia?",
+    "expected_files": ["inteligencia_artificial.docx"],
+    "expected_answer_hint": "John McCarthy, Conferencia de Dartmouth, 1956",
+    "notes": "DOCX — hecho histórico"
+  },
+  {
+    "question": "¿En qué año AlphaGo derrotó al campeón mundial de Go y quién era ese campeón?",
+    "expected_files": ["inteligencia_artificial.docx"],
+    "expected_answer_hint": "2016, Lee Sedol",
+    "notes": "DOCX — hito histórico"
+  },
+  {
+    "question": "¿Qué diferencia hay entre IA estrecha, IA general y superinteligencia?",
+    "expected_files": ["inteligencia_artificial.docx"],
+    "expected_answer_hint": "ANI: una tarea; AGI: equivalente al humano; ASI: supera al humano",
+    "notes": "DOCX — pregunta conceptual"
+  },
+  {
+    "question": "¿Cuáles son los principales riesgos éticos de la inteligencia artificial?",
+    "expected_files": ["inteligencia_artificial.docx"],
+    "expected_answer_hint": "sesgo, pérdida de empleo, vigilancia, deepfakes, caja negra",
+    "notes": "DOCX — pregunta de resumen"
+  },
+  {
+    "question": "¿Cuál fue el primer mensaje enviado por ARPANET y qué pasó con él?",
+    "expected_files": ["historia_internet.pptx"],
+    "expected_answer_hint": "LOGIN, solo llegó LO porque el sistema se cayó",
+    "notes": "PPTX — anécdota histórica"
+  },
+  {
+    "question": "¿Quién inventó la World Wide Web y dónde trabajaba?",
+    "expected_files": ["historia_internet.pptx"],
+    "expected_answer_hint": "Tim Berners-Lee, CERN, Suiza",
+    "notes": "PPTX — hecho histórico"
+  },
+  {
+    "question": "¿Cuándo fue fundado Google y por quiénes?",
+    "expected_files": ["historia_internet.pptx"],
+    "expected_answer_hint": "1998, Larry Page y Sergey Brin, Stanford",
+    "notes": "PPTX — dato de historia"
+  },
+  {
+    "question": "¿Cuántos usuarios de Internet había en el mundo en 2023?",
+    "expected_files": ["historia_internet.pptx"],
+    "expected_answer_hint": "5300 millones, 66% de la población mundial",
+    "notes": "PPTX — estadística"
+  },
+  {
+    "question": "¿Cuánto más potente es el metano respecto al CO₂ como gas de efecto invernadero?",
+    "expected_files": ["cambio_climatico.pdf"],
+    "expected_answer_hint": "80 veces más potente en horizonte de 20 años",
+    "notes": "PDF — dato comparativo"
+  },
+  {
+    "question": "¿Cuál es el objetivo de temperatura del Acuerdo de París?",
+    "expected_files": ["cambio_climatico.pdf"],
+    "expected_answer_hint": "por debajo de 2 °C, esfuerzos para 1,5 °C",
+    "notes": "PDF — dato del acuerdo"
+  },
+  {
+    "question": "¿Cuánto ha aumentado la concentración de CO₂ atmosférico desde la era preindustrial?",
+    "expected_files": ["cambio_climatico.pdf"],
+    "expected_answer_hint": "de 280 ppm a más de 420 ppm en 2023",
+    "notes": "PDF — datos numéricos precisos"
+  },
+  {
+    "question": "¿Qué es el IPCC y cuándo fue creado?",
+    "expected_files": ["cambio_climatico.pdf"],
+    "expected_answer_hint": "Panel Intergubernamental sobre el Cambio Climático, 1988",
+    "notes": "PDF — organismo científico"
   }
 ]

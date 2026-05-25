@@ -6,7 +6,7 @@ Los documentos se vuelcan por lotes a Mongo mediante operaciones bulk upsert.
 """
 
 import asyncio
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Awaitable, Callable
 
@@ -28,9 +28,35 @@ IGNORED_FILES = frozenset({
 })
 CONCURRENCY = 8
 BULK_BATCH = 200
+_INDEX_GROUP = 15   # ficheros por grupo
+_CHUNK_BATCH = 32   # chunks por llamada a Ollama (= rag_embed_batch por defecto)
 
 
 ProgressCallback = Callable[[int, int, str], Awaitable[None]]
+
+# --- Pause/resume state per source ---
+_pause_events: dict[str, asyncio.Event] = {}
+
+
+def _pause_event(source_id: str) -> asyncio.Event:
+    ev = _pause_events.get(source_id)
+    if ev is None:
+        ev = asyncio.Event()
+        ev.set()
+        _pause_events[source_id] = ev
+    return ev
+
+
+def pause_ingest(source_id: str) -> None:
+    _pause_event(source_id).clear()
+
+
+def resume_ingest(source_id: str) -> None:
+    _pause_event(source_id).set()
+
+
+def cleanup_ingest(source_id: str) -> None:
+    _pause_events.pop(source_id, None)
 
 
 def _is_hidden(name: str) -> bool:
@@ -81,8 +107,8 @@ def _build_doc(source_id: PydanticObjectId, file_path: Path) -> dict | None:
         "mimeType": mime_type,
         "category": category,
         "size": stat.st_size,
-        "createdAt": datetime.utcfromtimestamp(stat.st_ctime),
-        "modifiedAt": datetime.utcfromtimestamp(stat.st_mtime),
+        "createdAt": datetime.fromtimestamp(stat.st_ctime, UTC),
+        "modifiedAt": datetime.fromtimestamp(stat.st_mtime, UTC),
         "metadata": metadata,
     }
 
@@ -146,7 +172,7 @@ async def ingest_source(
 
         file_count = await FileDoc.find(FileDoc.sourceId == source_id).count()
         source.status = "done"
-        source.lastIngested = datetime.utcnow()
+        source.lastIngested = datetime.now(UTC)
         source.fileCount = file_count
         await source.save()
     except Exception:
@@ -160,7 +186,13 @@ async def _index_text_documents(
     source_id: PydanticObjectId,
     on_progress: ProgressCallback | None = None,
 ) -> None:
-    """Lanza indexación RAG para cada FileDoc de categoría text/document."""
+    """Indexación RAG en grupos de _INDEX_GROUP ficheros.
+
+    Cada grupo pasa por tres fases: extracción+chunking en paralelo,
+    embedding batch y guardado en Qdrant+MongoDB. Emitir progreso entre
+    grupos permite al usuario ver avance cada ~40 ficheros y habilita
+    el punto de pausa entre grupos.
+    """
     from beanie.operators import In
 
     from app.core.database import get_index_service
@@ -175,30 +207,138 @@ async def _index_text_documents(
         FileDoc.sourceId == source_id,
         In(FileDoc.category, ["text", "document"]),
     )
-    total = await query.count()
-    indexed = 0
+    files = await query.to_list()
+    total = len(files)
+    if not files:
+        return
 
-    # Signal start of indexing phase with total = -1 as sentinel
-    if on_progress:
-        await on_progress(0, -total, "")
+    src_str = str(source_id)
+    from app.services.rag.index_service import PreparedFile
 
-    async for file_doc in query:
-        result = await index_service.index_file(
-            file_id=str(file_doc.id),
-            source_id=str(file_doc.sourceId),
-            file_name=file_doc.name,
-            category=file_doc.category,
-            extension=file_doc.extension,
-            path=Path(file_doc.path),
-        )
-        file_doc.metadata.rag = RagMetadata(
-            indexStatus=result.status,
-            indexedChunks=result.chunks,
-            lastIndexedAt=result.indexed_at,
-            extractor=result.extractor,
-            error=result.error,
-        )
-        await file_doc.save()
-        indexed += 1
-        if on_progress:
-            await on_progress(indexed, -total, file_doc.name)
+    semaphore = asyncio.Semaphore(CONCURRENCY)
+    _EXTRACT_TIMEOUT = 45.0  # seconds per file before giving up
+
+    async def _prepare(file_doc):
+        async with semaphore:
+            try:
+                return await asyncio.wait_for(
+                    index_service.prepare_file(
+                        file_id=str(file_doc.id),
+                        source_id=str(file_doc.sourceId),
+                        file_name=file_doc.name,
+                        category=file_doc.category,
+                        extension=file_doc.extension,
+                        path=Path(file_doc.path),
+                    ),
+                    timeout=_EXTRACT_TIMEOUT,
+                )
+            except asyncio.TimeoutError:
+                return PreparedFile(
+                    str(file_doc.id), str(file_doc.sourceId), file_doc.name,
+                    file_doc.category, file_doc.extension,
+                    error="extraction timeout",
+                )
+            except Exception as exc:
+                return PreparedFile(
+                    str(file_doc.id), str(file_doc.sourceId), file_doc.name,
+                    file_doc.category, file_doc.extension,
+                    error=f"preparation error: {exc}",
+                )
+
+    indexed = 0    # ficheros ya almacenados en Qdrant (avanza en fase 3)
+    extracted = 0  # ficheros ya extraídos (avanza en fase 1, cumulative entre grupos)
+
+    for group_start in range(0, total, _INDEX_GROUP):
+        group = files[group_start : group_start + _INDEX_GROUP]
+
+        # Punto de pausa entre grupos
+        await _pause_event(src_str).wait()
+
+        # Fase 1 — extracción + chunking en paralelo con progreso por fichero
+        prepared_group: list = [None] * len(group)
+
+        async def _prepare_tracked(fd, idx, _grp=prepared_group):
+            nonlocal extracted
+            result = await _prepare(fd)
+            _grp[idx] = result
+            extracted += 1
+            if on_progress:
+                await on_progress(extracted, -total, f"__extract__:{fd.name}")
+            return result
+
+        await asyncio.gather(*[_prepare_tracked(fd, i) for i, fd in enumerate(group)])
+
+        # Fase 2 — embedding (dense + sparse) en lotes de CHUNK_BATCH con progreso por lote
+        all_texts: list[str] = [
+            chunk.text
+            for prep in prepared_group
+            if prep is not None and not prep.skipped
+            for chunk in prep.chunks
+        ]
+        all_vectors: list = []         # dense (float[] | None)
+        all_sparse_vectors: list = []  # sparse (SparseVector)
+        total_chunks = len(all_texts)
+
+        if total_chunks > 0:
+            if on_progress:
+                await on_progress(0, -total, f"__embed_progress__:0/{total_chunks}")
+            for chunk_start in range(0, total_chunks, _CHUNK_BATCH):
+                sub_batch = all_texts[chunk_start : chunk_start + _CHUNK_BATCH]
+                try:
+                    sub_vecs, sub_sparse = await asyncio.gather(
+                        asyncio.wait_for(
+                            index_service.embed_batch(sub_batch),
+                            timeout=120.0,  # 2 min por lote de chunks
+                        ),
+                        index_service.embed_sparse_batch(sub_batch),
+                    )
+                except asyncio.TimeoutError:
+                    print(f"[seekpal] embed timeout lote {chunk_start}-{chunk_start+len(sub_batch)}")
+                    sub_vecs = [None] * len(sub_batch)
+                    sub_sparse = await index_service.embed_sparse_batch(sub_batch)
+                all_vectors.extend(sub_vecs)
+                all_sparse_vectors.extend(sub_sparse)
+                chunks_done = min(chunk_start + _CHUNK_BATCH, total_chunks)
+                if on_progress:
+                    await on_progress(0, -total, f"__embed_progress__:{chunks_done}/{total_chunks}")
+
+        # Guard: abort if source was deleted during extraction/embedding
+        if await Source.get(source_id) is None:
+            cleanup_ingest(src_str)
+            return
+
+        # Phase 3: store in Qdrant + update MongoDB, emit progress per file
+        vec_idx = 0
+        for file_doc, prep in zip(group, prepared_group):
+            if prep is None:
+                indexed += 1
+                if on_progress:
+                    await on_progress(indexed, -total, file_doc.name)
+                continue
+            if prep.skipped:
+                status = "skipped" if prep.error in (
+                    "skipped", "empty text", "no chunks produced", None
+                ) else "failed"
+                rag = RagMetadata(indexStatus=status, indexedChunks=0,
+                                  extractor=prep.extractor, error=prep.error)
+            else:
+                n = len(prep.chunks)
+                file_vectors = all_vectors[vec_idx : vec_idx + n]
+                file_sparse = all_sparse_vectors[vec_idx : vec_idx + n]
+                vec_idx += n
+                result = await index_service.store_prepared(prep, file_vectors, file_sparse)
+                rag = RagMetadata(
+                    indexStatus=result.status,
+                    indexedChunks=result.chunks,
+                    lastIndexedAt=result.indexed_at,
+                    extractor=result.extractor,
+                    error=result.error,
+                )
+
+            file_doc.metadata.rag = rag
+            await file_doc.save()
+            indexed += 1
+            if on_progress:
+                await on_progress(indexed, -total, file_doc.name)
+
+    cleanup_ingest(src_str)

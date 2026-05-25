@@ -18,12 +18,12 @@ class Settings(BaseSettings):
     # RAG
     ollama_url: str = "http://localhost:11434"
     qdrant_path: str = "./qdrant_data"
-    llm_model: str = "llama3.2:3b"
-    embedding_model: str = "bge-m3"
+    llm_model: str = "qwen3:4b"
+    embedding_model: str = "intfloat/multilingual-e5-large"
     rag_chunk_size: int = 512
     rag_chunk_overlap: int = 64
-    rag_top_k: int = 5
-    rag_embed_batch: int = 32
+    rag_top_k: int = 10
+    rag_embed_batch: int = 8
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=False, extra="ignore")
 

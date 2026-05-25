@@ -28,6 +28,7 @@ export default function SearchPage() {
 
   const [mode, setMode] = useState("auto");
   const [sources, setSources] = useState([]);
+  const [topK, setTopK] = useState(10); // valor por defecto hasta que cargue del backend
 
   // Ask-mode state (ephemeral, not persisted in context)
   const [citations, setCitations] = useState([]);
@@ -40,6 +41,15 @@ export default function SearchPage() {
 
   useEffect(() => {
     getSources().then((r) => setSources(r.data.data || []));
+  }, []);
+
+  // Cargar top_k real del backend (evita hardcodear el valor aquí)
+  useEffect(() => {
+    import("../api/client.js").then(({ default: api }) => {
+      api.get("/ask/config")
+        .then((r) => { if (r.data?.data?.top_k) setTopK(r.data.data.top_k); })
+        .catch(() => {}); // usa el valor por defecto si falla
+    });
   }, []);
 
   // Classic search effect
@@ -75,7 +85,7 @@ export default function SearchPage() {
     setRecent((prev) => [q, ...prev.filter((r) => r !== q)].slice(0, 6));
 
     askStream(
-      { question: q, top_k: 5, source_id: sourceId || undefined, categories: category ? [category] : undefined },
+      { question: q, top_k: topK, source_id: sourceId || undefined, categories: category ? [category] : undefined },
       {
         signal: controller.signal,
         onCitations: (c) => setCitations(c),
@@ -87,7 +97,7 @@ export default function SearchPage() {
         },
       },
     );
-  }, [setQuery, setSubmitted, setRecent, sourceId, category]);
+  }, [setQuery, setSubmitted, setRecent, sourceId, category, topK]);
 
   function handleSubmit(e) {
     e.preventDefault();

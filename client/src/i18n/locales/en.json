@@ -20,7 +20,27 @@
     "title":      "Settings",
     "subtitle":   "Application configuration",
     "appearance": "Appearance",
-    "security":   "Security"
+    "security":   "Security",
+    "hardware":   "Hardware"
+  },
+  "hardware": {
+    "title":          "Detected components",
+    "cpu":            "Processor",
+    "ram":            "Memory",
+    "gpu":            "Graphics",
+    "noGpu":          "No dedicated graphics detected",
+    "unknown":        "Unknown",
+    "aiProcessing":   "AI processing",
+    "cpuOnly":        "Processor (no graphics detected)",
+    "cpuFallback":    "Processor (GPU available but not active)",
+    "enableGpu":      "Activate GPU acceleration",
+    "downloading":    "Downloading components…",
+    "applying":       "Applying changes…",
+    "done":           "✅ GPU acceleration active",
+    "error":          "Error during activation. Try restarting SeekPal manually.",
+    "indexingWarning":"SeekPal is currently indexing files. Pause the indexing and activate GPU acceleration now?",
+    "pauseAndApply":  "Pause and activate",
+    "wait":           "Wait"
   },
   "theme": {
     "title": "Theme",
@@ -97,22 +117,29 @@
     "fileCount":  "{{count}} files",
     "progress":   "{{current}} / {{total}} ({{pct}}%)",
     "error":      "Error: {{message}}",
+    "embedProgress": "{{current}}/{{total}} vectors ({{pct}}%)",
+    "pause":   "Pause",
+    "resume":  "Resume",
+    "cancel":  "Cancel",
     "phase": {
-      "scan":  "File scanning",
-      "index": "AI indexing"
+      "scan":       "File scanning",
+      "extracting": "Extracting files",
+      "embedding":  "Generating vectors…",
+      "index":      "AI indexing",
+      "paused":     "Indexing paused"
     }
   },
   "search": {
-    "title":       "Search results",
-    "placeholder": "Search by file name...",
+    "title":       "Relevant documents",
+    "placeholder": "Search documents by content or name...",
     "submit":      "Search",
     "searching":   "Searching...",
-    "subtitle":    "{{count}} files found for \"{{query}}\"",
-    "results":     "{{count}} files found",
+    "subtitle":    "{{count}} relevant documents for \"{{query}}\"",
+    "results":     "{{count}} documents found",
     "empty":       "No results for \"{{query}}\"",
     "landing": {
       "title":    "Search your files",
-      "subtitle": "Ask in natural language or search by file name"
+      "subtitle": "Ask in natural language or search documents by content"
     },
     "mode": {
       "search": "Search",

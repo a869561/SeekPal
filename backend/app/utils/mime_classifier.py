@@ -11,6 +11,24 @@ from typing import Literal
 
 FileCategory = Literal["text", "document", "image", "audio", "video", "other"]
 
+# --- Content-based text detection (git-style heuristic) ---
+_SNIFF_BYTES = 8192
+_BINARY_CTRL = frozenset(range(0x00, 0x09)) | frozenset(range(0x0E, 0x20)) | {0x7F}
+
+
+def _looks_like_text(path: Path) -> bool:
+    """Returns True if the file's first 8 KB looks like plain text."""
+    try:
+        sample = path.read_bytes()[:_SNIFF_BYTES]
+    except OSError:
+        return False
+    if not sample:
+        return False
+    if 0x00 in sample:
+        return False
+    ctrl = sum(1 for b in sample if b in _BINARY_CTRL)
+    return ctrl / len(sample) < 0.05
+
 
 TEXT_EXTENSIONS = frozenset({
     ".txt", ".md", ".markdown", ".html", ".htm", ".css", ".js", ".mjs", ".cjs",
@@ -50,12 +68,16 @@ def _ext(path: str | Path) -> str:
 
 
 def is_indexable(path: str | Path) -> bool:
-    return _ext(path) in _ALL_EXTENSIONS
+    p = Path(path)
+    if p.suffix.lower() in _ALL_EXTENSIONS:
+        return True
+    return _looks_like_text(p)
 
 
 def classify(path: str | Path) -> tuple[FileCategory, str]:
-    ext = _ext(path)
-    mime_type, _ = mimetypes.guess_type(str(path))
+    p = Path(path)
+    ext = p.suffix.lower()
+    mime_type, _ = mimetypes.guess_type(str(p))
     mime_type = mime_type or "application/octet-stream"
 
     if ext in TEXT_EXTENSIONS:
@@ -68,4 +90,6 @@ def classify(path: str | Path) -> tuple[FileCategory, str]:
         return "audio", mime_type
     if ext in VIDEO_EXTENSIONS:
         return "video", mime_type
+    if _looks_like_text(p):
+        return "text", "text/plain"
     return "other", mime_type

@@ -35,11 +35,33 @@ from app.routers import (
 from app.services import watcher_service
 
 
+async def _cleanup_orphans() -> None:
+    """Elimina FileDocs cuya Source ya no existe (race condition al borrar fuentes)."""
+    from app.core.database import get_vector_service
+    from app.models.file import FileDoc
+    from app.models.source import Source
+
+    source_ids = {str(s.id) for s in await Source.find().to_list()}
+    all_files = await FileDoc.find().to_list()
+    orphans = [f for f in all_files if str(f.sourceId) not in source_ids]
+    if not orphans:
+        return
+    vs = get_vector_service()
+    for f in orphans:
+        try:
+            await asyncio.to_thread(vs.delete_by_file, str(f.id))
+        except Exception:
+            pass
+        await f.delete()
+    print(f"[seekpal] Limpiados {len(orphans)} ficheros huérfanos.")
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     qdrant_path = await connect_database()
     print(f"[seekpal] MongoDB conectado: {settings.mongo_uri}/{settings.mongo_db}")
     print(f"[seekpal] Qdrant inicializado en: {qdrant_path}")
+    await _cleanup_orphans()
     await watcher_service.init_watchers(asyncio.get_running_loop())
     try:
         yield

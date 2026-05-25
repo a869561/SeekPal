@@ -46,6 +46,7 @@ function FileResultCard({ file }) {
   const { t } = useTranslation();
   const s = CAT_STYLE[file.category] || CAT_STYLE.other;
   const Icon = s.icon;
+  const hasRelevance = file._relevanceScore != null;
 
   return (
     <div className="flex items-start gap-4 p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl hover:border-indigo-300 dark:hover:border-indigo-600 transition-colors">
@@ -64,6 +65,12 @@ function FileResultCard({ file }) {
           {formatSize(file.size) && <span>{formatSize(file.size)}</span>}
           <MetaSnippet file={file} />
         </div>
+        {/* Fragmento del contenido relevante (solo en búsqueda semántica) */}
+        {hasRelevance && file._snippet && (
+          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed border-l-2 border-indigo-200 dark:border-indigo-700 pl-2">
+            {file._snippet}
+          </p>
+        )}
       </div>
     </div>
   );

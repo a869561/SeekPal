@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Trash2, PlayCircle, Clock, CheckCircle, AlertCircle, Loader, RefreshCw } from "lucide-react";
+import { Trash2, PlayCircle, Clock, CheckCircle, AlertCircle, Loader, RefreshCw, Brain } from "lucide-react";
 import IngestionProgress from "./IngestionProgress.jsx";
 import { toggleAutoIndex } from "../../api/sources.js";
 
@@ -23,10 +23,11 @@ export default function SourcesList({ sources, onDelete, onUpdate }) {
   const [togglingId, setTogglingId] = useState(null);
 
   const STATUS_CONFIG = {
-    idle:     { icon: Clock,        color: "text-slate-400",   bg: "bg-slate-100 dark:bg-slate-700",    label: t("sources.status.idle") },
-    scanning: { icon: Loader,       color: "text-indigo-500",  bg: "bg-indigo-50 dark:bg-indigo-950",   label: t("sources.status.scanning") },
-    done:     { icon: CheckCircle,  color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-950", label: t("sources.status.done") },
-    error:    { icon: AlertCircle,  color: "text-red-500",     bg: "bg-red-50 dark:bg-red-950",         label: t("sources.status.error") },
+    idle:     { icon: Clock,        color: "text-slate-400",   bg: "bg-slate-100 dark:bg-slate-700",      label: t("sources.status.idle") },
+    scanning: { icon: Loader,       color: "text-indigo-500",  bg: "bg-indigo-50 dark:bg-indigo-950",     label: t("sources.status.scanning") },
+    indexing: { icon: Brain,        color: "text-violet-500",  bg: "bg-violet-50 dark:bg-violet-950",     label: t("sources.status.indexing") },
+    done:     { icon: CheckCircle,  color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-950",   label: t("sources.status.done") },
+    error:    { icon: AlertCircle,  color: "text-red-500",     bg: "bg-red-50 dark:bg-red-950",           label: t("sources.status.error") },
   };
 
   async function handleToggleAutoIndex(source) {
@@ -50,7 +51,10 @@ export default function SourcesList({ sources, onDelete, onUpdate }) {
   return (
     <div className="space-y-3">
       {sources.map((source) => {
-        const cfg = STATUS_CONFIG[source.status] || STATUS_CONFIG.idle;
+        // When scanning with files already present → embedding phase (not initial scan)
+        const effectiveStatus =
+          source.status === "scanning" && (source.fileCount ?? 0) > 0 ? "indexing" : source.status;
+        const cfg = STATUS_CONFIG[effectiveStatus] || STATUS_CONFIG.idle;
         const Icon = cfg.icon;
         const isIngesting = ingesting === source._id;
 
@@ -61,7 +65,7 @@ export default function SourcesList({ sources, onDelete, onUpdate }) {
                 <div className="flex items-center gap-2 mb-1">
                   <h3 className="font-semibold text-slate-800 dark:text-slate-100 truncate">{source.name}</h3>
                   <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${cfg.bg} ${cfg.color}`}>
-                    <Icon size={11} className={source.status === "scanning" ? "animate-spin" : ""} />
+                    <Icon size={11} className={source.status === "scanning" ? "animate-spin" : effectiveStatus === "indexing" ? "animate-pulse" : ""} />
                     {cfg.label}
                   </span>
                 </div>

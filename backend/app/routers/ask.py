@@ -64,6 +64,12 @@ async def ask(body: AskRequest, request: Request):
     return EventSourceResponse(event_stream())
 
 
+@router.get("/config")
+async def ask_config():
+    """Expone los parámetros RAG que el frontend necesita conocer."""
+    return ok({"top_k": settings.rag_top_k})
+
+
 @router.get("/health")
 async def ask_health():
     client = AsyncClient(host=settings.ollama_url, timeout=10.0)

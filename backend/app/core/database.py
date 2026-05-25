@@ -10,7 +10,7 @@ from app.core.config import settings
 from app.models.config import Config
 from app.models.file import FileDoc
 from app.models.source import Source
-from app.services.rag.embedding_service import EmbeddingService
+from app.services.rag.embedding_service import EmbeddingService, SparseEmbeddingService
 from app.services.rag.generation_service import GenerationService
 from app.services.rag.index_service import IndexService
 from app.services.rag.retrieval_service import RetrievalService
@@ -20,6 +20,7 @@ from app.services.rag.vector_service import VectorService
 _client: AsyncIOMotorClient | None = None
 _vector_service: VectorService | None = None
 _embedding_service: EmbeddingService | None = None
+_sparse_embedding_service: SparseEmbeddingService | None = None
 _index_service: IndexService | None = None
 _retrieval_service: RetrievalService | None = None
 _generation_service: GenerationService | None = None
@@ -38,7 +39,9 @@ def _resolve_qdrant_path() -> str:
 
 
 async def connect_database() -> None:
-    global _client, _vector_service, _embedding_service, _index_service, _retrieval_service, _generation_service
+    global _client, _vector_service, _embedding_service, _sparse_embedding_service
+    global _index_service, _retrieval_service, _generation_service
+
     _client = AsyncIOMotorClient(settings.mongo_uri)
     db = _client[settings.mongo_db]
     await init_beanie(database=db, document_models=[Config, Source, FileDoc])
@@ -52,13 +55,15 @@ async def connect_database() -> None:
     _vector_service.ensure_collection()
 
     _embedding_service = EmbeddingService(
-        base_url=settings.ollama_url,
         model=settings.embedding_model,
         batch_size=settings.rag_embed_batch,
     )
 
+    _sparse_embedding_service = SparseEmbeddingService()
+
     _index_service = IndexService(
         embedding=_embedding_service,
+        sparse_embedding=_sparse_embedding_service,
         vector=_vector_service,
         chunk_size=settings.rag_chunk_size,
         overlap=settings.rag_chunk_overlap,
@@ -66,6 +71,7 @@ async def connect_database() -> None:
 
     _retrieval_service = RetrievalService(
         embedding=_embedding_service,
+        sparse_embedding=_sparse_embedding_service,
         vector=_vector_service,
     )
 
@@ -78,7 +84,9 @@ async def connect_database() -> None:
 
 
 async def disconnect_database() -> None:
-    global _client, _vector_service, _embedding_service, _index_service, _retrieval_service, _generation_service
+    global _client, _vector_service, _embedding_service, _sparse_embedding_service
+    global _index_service, _retrieval_service, _generation_service
+
     if _generation_service is not None:
         try:
             await _generation_service.close()
@@ -86,6 +94,7 @@ async def disconnect_database() -> None:
             pass
         _generation_service = None
     _retrieval_service = None
+    _sparse_embedding_service = None
     if _vector_service is not None:
         try:
             _vector_service.close()

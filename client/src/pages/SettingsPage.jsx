@@ -3,6 +3,7 @@ import ThemeSelector from "../components/settings/ThemeSelector.jsx";
 import FontSizeSelector from "../components/settings/FontSizeSelector.jsx";
 import LanguageSelector from "../components/settings/LanguageSelector.jsx";
 import ChangePassword from "../components/settings/ChangePassword.jsx";
+import HardwareCard from "../components/settings/HardwareCard.jsx";
 
 export default function SettingsPage() {
   const { t } = useTranslation();
@@ -29,6 +30,11 @@ export default function SettingsPage() {
             {t("settings.security")}
           </h2>
           <ChangePassword />
+
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 px-1 pt-2">
+            {t("settings.hardware")}
+          </h2>
+          <HardwareCard />
         </div>
       </div>
     </div>
