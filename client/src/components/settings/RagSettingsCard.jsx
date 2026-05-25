@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2, CheckCircle, AlertCircle, Sparkles, Mic, Film, Layers, RefreshCw } from "lucide-react";
+import { Loader2, CheckCircle, AlertCircle, Sparkles, Mic, Film, Layers, RefreshCw, FileText, Download } from "lucide-react";
 import { getSettings, saveSettings } from "../../api/settings.js";
-import { restartApp, invalidateHardwareCache } from "../../api/system.js";
+import {
+  restartApp, invalidateHardwareCache,
+  getDoclingStatus, installDocling,
+} from "../../api/system.js";
 
 const WHISPER_MODELS = [
   { id: "tiny",   sizeMB: 39,   note: "Mas rapido, calidad baja" },
@@ -13,7 +16,7 @@ const WHISPER_MODELS = [
 
 // Campos que requieren reiniciar el backend para entrar en efecto
 const RESTART_FIELDS = new Set([
-  "rerankerEnabled", "whisperModel", "indexMultimedia",
+  "rerankerEnabled", "whisperModel", "useDocling", "indexMultimedia",
   "videoFrameInterval", "videoMaxFrames",
 ]);
 
@@ -24,6 +27,10 @@ export default function RagSettingsCard() {
   const [loading, setLoading] = useState(true);
   const [state, setState] = useState("idle"); // idle | saving | restarting | done | error
 
+  // Estado de la instalacion de Docling (separado del flujo de guardado RAG)
+  const [doclingInstalled, setDoclingInstalled] = useState(false);
+  const [doclingState, setDoclingState] = useState("idle"); // idle | installing | done | error
+
   useEffect(() => {
     (async () => {
       try {
@@ -32,9 +39,42 @@ export default function RagSettingsCard() {
         setOriginal(snapshot);
         setForm({ ...snapshot });
       } catch { /* ignore */ }
+      try {
+        const ds = await getDoclingStatus();
+        setDoclingInstalled(!!ds.installed);
+      } catch { /* ignore */ }
       finally { setLoading(false); }
     })();
   }, []);
+
+  // Polling del estado de instalacion de Docling (puede tardar varios minutos)
+  useEffect(() => {
+    if (doclingState !== "installing") return;
+    const interval = setInterval(async () => {
+      try {
+        const ds = await getDoclingStatus();
+        if (ds.status === "done" || ds.installed) {
+          setDoclingInstalled(true);
+          setDoclingState("done");
+          clearInterval(interval);
+          setTimeout(() => setDoclingState("idle"), 3000);
+        } else if (ds.status === "error") {
+          setDoclingState("error");
+          clearInterval(interval);
+        }
+      } catch { /* esperar */ }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [doclingState]);
+
+  const handleInstallDocling = async () => {
+    setDoclingState("installing");
+    try {
+      await installDocling();
+    } catch {
+      setDoclingState("error");
+    }
+  };
 
   if (loading) {
     return (
@@ -116,6 +156,68 @@ export default function RagSettingsCard() {
             disabled={busy}
           />
         </div>
+      </div>
+
+      {/* Docling — PDFs estructurados (opt-in, ~2 GB) */}
+      <div className="mb-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-2">
+            <FileText size={16} className="text-slate-400 mt-0.5 shrink-0" />
+            <div>
+              <div className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                {t("ragSettings.useDocling", "PDFs estructurados (Docling)")}
+              </div>
+              <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                {t(
+                  "ragSettings.useDoclingHint",
+                  "Preserva tablas, multi-columna y OCR de PDFs escaneados. ~30x mas lento que PyMuPDF."
+                )}
+              </div>
+            </div>
+          </div>
+          <Toggle
+            checked={form.useDocling ?? false}
+            onChange={(v) => update("useDocling", v)}
+            disabled={busy || !doclingInstalled}
+          />
+        </div>
+
+        {!doclingInstalled && doclingState === "idle" && (
+          <div className="mt-2 ml-6 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+            <p className="text-xs text-amber-700 dark:text-amber-400 mb-2">
+              {t(
+                "ragSettings.doclingNotInstalled",
+                "Requiere instalar Docling (~2 GB: torch + transformers + modelos)."
+              )}
+            </p>
+            <button
+              onClick={handleInstallDocling}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium transition"
+            >
+              <Download size={12} />
+              {t("ragSettings.installDocling", "Instalar Docling")}
+            </button>
+          </div>
+        )}
+
+        {doclingState === "installing" && (
+          <div className="mt-2 ml-6 flex items-center gap-2 text-xs text-indigo-600 dark:text-indigo-400">
+            <Loader2 size={12} className="animate-spin" />
+            {t("ragSettings.installingDocling", "Descargando Docling (puede tardar 5-10 min)...")}
+          </div>
+        )}
+        {doclingState === "done" && (
+          <div className="mt-2 ml-6 flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400">
+            <CheckCircle size={12} />
+            {t("ragSettings.doclingInstalled", "Docling instalado. Activa el interruptor para usarlo.")}
+          </div>
+        )}
+        {doclingState === "error" && (
+          <div className="mt-2 ml-6 flex items-center gap-2 text-xs text-red-600 dark:text-red-400">
+            <AlertCircle size={12} />
+            {t("ragSettings.doclingError", "Error instalando Docling. Mira los logs del backend.")}
+          </div>
+        )}
       </div>
 
       {/* Multimedia master switch */}

@@ -24,6 +24,7 @@ from typing import Any
 _defaults: dict[str, Any] = {
     "rerankerEnabled": True,
     "whisperModel": "small",
+    "useDocling": False,
     "indexMultimedia": True,
     "videoFrameInterval": 30,
     "videoMaxFrames": 20,

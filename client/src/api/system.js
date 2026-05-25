@@ -31,3 +31,9 @@ export const setProvider = (provider) =>
 
 export const restartApp = (force = false) =>
   api.post(`/system/restart${force ? "?force=true" : ""}`).then((r) => r.data);
+
+export const getDoclingStatus = () =>
+  api.get("/system/docling-status").then((r) => r.data.data);
+
+export const installDocling = () =>
+  api.post("/system/install-docling").then((r) => r.data.data);

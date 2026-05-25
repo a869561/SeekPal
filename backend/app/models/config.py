@@ -24,6 +24,12 @@ class UserSettings(BaseModel):
     rerankerEnabled: bool = True
     whisperModel: WhisperModel = "small"
 
+    # PDFs estructurados (Docling). Default OFF porque requiere ~2 GB de
+    # dependencias (torch + transformers + modelos) — se instala on-demand
+    # desde Settings. Si esta ON sin docling instalado, PdfExtractor cae a
+    # PyMuPDF con un warning.
+    useDocling: bool = False
+
     # Multimedia
     indexMultimedia: bool = True       # master switch para audio/imagen/video
     videoFrameInterval: int = Field(default=30, ge=1, le=600)

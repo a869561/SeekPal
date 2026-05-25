@@ -237,15 +237,22 @@ async def _index_text_documents(
     semaphore = asyncio.Semaphore(CONCURRENCY)
     # text/document son fast-path; multimedia requiere mucho mas tiempo:
     # transcripcion de audio ~real-time, video aun mas (audio + N captions).
+    # Si useDocling esta activo, los PDF tambien son lentos (~3-10s/pag).
     _EXTRACT_TIMEOUT_TEXT = 45.0
+    _EXTRACT_TIMEOUT_PDF_DOCLING = 1800.0  # 30 min/PDF con Docling
     _EXTRACT_TIMEOUT_AUDIO = 600.0   # 10 min/audio
     _EXTRACT_TIMEOUT_IMAGE = 120.0   # 2 min/imagen (OCR + caption Moondream)
     _EXTRACT_TIMEOUT_VIDEO = 1800.0  # 30 min/video
 
-    def _timeout_for(cat: str) -> float:
+    from app.core import runtime_settings as _rs
+    _use_docling = bool(_rs.get("useDocling", False))
+
+    def _timeout_for(cat: str, ext: str) -> float:
         if cat == "audio": return _EXTRACT_TIMEOUT_AUDIO
         if cat == "image": return _EXTRACT_TIMEOUT_IMAGE
         if cat == "video": return _EXTRACT_TIMEOUT_VIDEO
+        if cat == "document" and ext == ".pdf" and _use_docling:
+            return _EXTRACT_TIMEOUT_PDF_DOCLING
         return _EXTRACT_TIMEOUT_TEXT
 
     async def _prepare(file_doc):
@@ -260,7 +267,7 @@ async def _index_text_documents(
                         extension=file_doc.extension,
                         path=Path(file_doc.path),
                     ),
-                    timeout=_timeout_for(file_doc.category),
+                    timeout=_timeout_for(file_doc.category, file_doc.extension),
                 )
             except asyncio.TimeoutError:
                 return PreparedFile(

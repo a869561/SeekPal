@@ -75,6 +75,24 @@ async def install_status():
     return ok(system_service.get_install_status())
 
 
+@router.get("/docling-status")
+async def docling_status():
+    """Estado de la instalación de Docling (PDFs estructurados)."""
+    return ok(system_service.get_docling_status())
+
+
+@router.post("/install-docling")
+async def install_docling(background_tasks: BackgroundTasks):
+    """Instala docling (~2 GB: torch + transformers + modelos) en background."""
+    current = system_service.get_docling_status()
+    if current["status"] == "installing":
+        raise APIError("Ya hay una instalación de Docling en progreso", status_code=409)
+    if current["installed"] and current["status"] != "error":
+        return ok({"status": "done", "installed": True})
+    background_tasks.add_task(system_service.install_docling)
+    return ok({"status": "installing"})
+
+
 @router.post("/enable-gpu")
 async def enable_gpu(background_tasks: BackgroundTasks):
     """Instala el paquete onnxruntime adecuado para la GPU detectada y reinicia SeekPal."""

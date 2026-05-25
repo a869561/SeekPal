@@ -229,9 +229,44 @@ InstallStatus = Literal["idle", "installing", "done", "error"]
 _install_status: InstallStatus = "idle"
 _install_error: str | None = None
 
+# Estado de instalacion de Docling (~2 GB, on-demand desde Settings RAG)
+_docling_status: InstallStatus = "idle"
+_docling_error: str | None = None
+
 
 def get_install_status() -> dict:
     return {"status": _install_status, "error": _install_error}
+
+
+def is_docling_installed() -> bool:
+    import importlib.util
+    return importlib.util.find_spec("docling") is not None
+
+
+def get_docling_status() -> dict:
+    return {
+        "status": _docling_status,
+        "error": _docling_error,
+        "installed": is_docling_installed(),
+    }
+
+
+async def install_docling() -> None:
+    """Instala docling (torch + transformers + modelos, ~2 GB) en background.
+
+    No reinicia automaticamente — el usuario aplica useDocling=True desde
+    Settings y eso ya dispara el reinicio normal del flujo de ajustes RAG."""
+    global _docling_status, _docling_error
+    _docling_status = "installing"
+    _docling_error = None
+    try:
+        # docling trae torch como dep transitiva. Instalamos en una sola
+        # invocacion para que pip resuelva versiones compatibles entre todas.
+        await asyncio.to_thread(_pip_install_sync, ["docling"])
+        _docling_status = "done"
+    except Exception as exc:
+        _docling_status = "error"
+        _docling_error = str(exc)
 
 
 # ---------------------------------------------------------------------------
