@@ -2,7 +2,8 @@ from datetime import UTC, datetime
 from typing import Literal
 
 import pymongo
-from beanie import Document
+from beanie import Document, before_event
+from beanie.odm.actions import Replace, Save, SaveChanges, Update
 from pydantic import Field
 
 
@@ -22,6 +23,10 @@ class Source(Document):
     autoIndex: bool = False
     createdAt: datetime = Field(default_factory=_now_utc)
     updatedAt: datetime = Field(default_factory=_now_utc)
+
+    @before_event(Save, Replace, Update, SaveChanges)
+    def _touch_updated_at(self) -> None:
+        self.updatedAt = _now_utc()
 
     class Settings:
         name = "sources"

@@ -11,7 +11,10 @@ from __future__ import annotations
 
 from app.services.rag.types import Chunk, ExtractedDoc
 
-SEPARATORS = ["\n\n", "\n", ". ", " ", ""]
+# Probados en orden: si ninguno funciona se corta por max_chars (path sin
+# separador). NO incluir "" aqui: str.split("") lanza ValueError y rompe la
+# indexacion en textos sin espacios > max_chars (base64, JSON minificado, etc.).
+SEPARATORS = ["\n\n", "\n", ". ", " "]
 CHARS_PER_TOKEN = 4
 
 

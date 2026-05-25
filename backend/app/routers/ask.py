@@ -11,6 +11,18 @@ from app.core.responses import RagErrorCode, ok
 from app.deps.auth import require_auth
 from app.schemas.ask import AskRequest, Citation
 
+
+# Cliente HTTP de health: reusable y compartido — antes se creaba uno por
+# llamada y nunca se cerraba (httpx conexiones se acumulaban en el pool).
+_health_client: AsyncClient | None = None
+
+
+def _get_health_client() -> AsyncClient:
+    global _health_client
+    if _health_client is None:
+        _health_client = AsyncClient(host=settings.ollama_url, timeout=10.0)
+    return _health_client
+
 router = APIRouter(prefix="/api/ask", tags=["ask"], dependencies=[Depends(require_auth)])
 
 
@@ -72,7 +84,7 @@ async def ask_config():
 
 @router.get("/health")
 async def ask_health():
-    client = AsyncClient(host=settings.ollama_url, timeout=10.0)
+    client = _get_health_client()
 
     try:
         resp = await client.list()

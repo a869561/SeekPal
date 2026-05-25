@@ -1,4 +1,8 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
+
+from app.models.config import WhisperModel
 
 
 class AddSourceRequest(BaseModel):
@@ -7,12 +11,12 @@ class AddSourceRequest(BaseModel):
 
 
 class SettingsPatch(BaseModel):
-    theme: str | None = None
-    fontSize: str | None = None
-    language: str | None = None
+    theme: Literal["auto", "light", "dark"] | None = None
+    fontSize: Literal["sm", "md", "lg"] | None = None
+    language: Literal["es", "en"] | None = None
     # RAG / multimedia (requieren reinicio para que entren en efecto)
     rerankerEnabled: bool | None = None
-    whisperModel: str | None = None
+    whisperModel: WhisperModel | None = None
     indexMultimedia: bool | None = None
-    videoFrameInterval: int | None = None
-    videoMaxFrames: int | None = None
+    videoFrameInterval: int | None = Field(default=None, ge=1, le=600)
+    videoMaxFrames: int | None = Field(default=None, ge=1, le=500)

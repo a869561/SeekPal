@@ -19,14 +19,22 @@ _tasks: dict[str, asyncio.Task] = {}
 _queues: dict[str, asyncio.Queue] = {}
 
 
-def _cancel_existing(sid: str) -> None:
-    """Cancel any running ingestion for this source and clean up state."""
+def cancel_ingest_for_source(sid: str) -> None:
+    """Cancel any running ingestion for this source and clean up state.
+
+    Publica para que sources_service.remove_source() la invoque al borrar la
+    fuente — asi la task de ingesta termina antes de que delete_by_source borre
+    los chunks de Qdrant (evita chunks huerfanos por race condition)."""
     old = _tasks.pop(sid, None)
     if old and not old.done():
         old.cancel()
     _queues.pop(sid, None)
     scanner_service.resume_ingest(sid)  # clear any pause so the task can exit
     scanner_service.cleanup_ingest(sid)
+
+
+# Alias interno (compat con el handler de ingest)
+_cancel_existing = cancel_ingest_for_source
 
 
 @router.post("/{source_id}/ingest", dependencies=[Depends(require_auth)])
@@ -38,6 +46,11 @@ async def ingest(source_id: PydanticObjectId, request: Request):
     _queues[sid] = queue
 
     async def on_progress(current: int, total: int, file: str) -> None:
+        # Scanner usa total<0 + sentinel en `file` para distinguir fases RAG:
+        #   __extract__:<name>          -> progreso de extraccion+chunking
+        #   __embedding__               -> marca arranque de la fase embedding
+        #   __embed_progress__:<c>/<t>  -> progreso de embedding por lote
+        #   (resto)                     -> progreso de indexado (Qdrant + Mongo)
         if total >= 0:
             await queue.put({"type": "progress", "current": current, "total": total, "file": file})
             return

@@ -29,7 +29,12 @@ IGNORED_FILES = frozenset({
 CONCURRENCY = 8
 BULK_BATCH = 200
 _INDEX_GROUP = 15   # ficheros por grupo
-_CHUNK_BATCH = 32   # chunks por llamada a Ollama (= rag_embed_batch por defecto)
+
+
+def _chunk_batch_size() -> int:
+    """Lee el tamano de lote de embedding desde settings (BGE-M3 en CPU: ~8)."""
+    from app.core.config import settings
+    return max(1, settings.rag_embed_batch)
 
 
 ProgressCallback = Callable[[int, int, str], Awaitable[None]]
@@ -206,6 +211,7 @@ async def _index_text_documents(
     try:
         index_service = get_index_service()
     except RuntimeError:
+        print(f"[seekpal] RAG indexing saltado: IndexService no inicializado (source {source_id})")
         return
 
     # Master switch: si el usuario desactiva multimedia desde Settings,
@@ -305,9 +311,12 @@ async def _index_text_documents(
 
         if total_chunks > 0:
             if on_progress:
+                # Marca el cambio de fase extracting → embedding para el frontend
+                await on_progress(0, -total, "__embedding__")
                 await on_progress(0, -total, f"__embed_progress__:0/{total_chunks}")
-            for chunk_start in range(0, total_chunks, _CHUNK_BATCH):
-                sub_batch = all_texts[chunk_start : chunk_start + _CHUNK_BATCH]
+            batch_size = _chunk_batch_size()
+            for chunk_start in range(0, total_chunks, batch_size):
+                sub_batch = all_texts[chunk_start : chunk_start + batch_size]
                 try:
                     sub_vecs, sub_sparse = await asyncio.gather(
                         asyncio.wait_for(
@@ -322,7 +331,7 @@ async def _index_text_documents(
                     sub_sparse = await index_service.embed_sparse_batch(sub_batch)
                 all_vectors.extend(sub_vecs)
                 all_sparse_vectors.extend(sub_sparse)
-                chunks_done = min(chunk_start + _CHUNK_BATCH, total_chunks)
+                chunks_done = min(chunk_start + batch_size, total_chunks)
                 if on_progress:
                     await on_progress(0, -total, f"__embed_progress__:{chunks_done}/{total_chunks}")
 

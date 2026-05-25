@@ -67,3 +67,23 @@ def test_chunks_are_non_empty():
     doc = ExtractedDoc(text=text, extractor="text")
     chunks = chunk_text(doc, chunk_size=10, overlap=2)
     assert all(c.text.strip() != "" for c in chunks)
+
+
+def test_text_without_separators_does_not_crash():
+    """Regresión: texto largo sin separadores (base64, JSON minificado, etc.)
+    rompía con `ValueError: empty separator` porque el último separador era ""."""
+    text = "a" * 3000  # > max_chars (512*4=2048) y sin espacios/newlines
+    doc = ExtractedDoc(text=text, extractor="text")
+    chunks = chunk_text(doc, chunk_size=512, overlap=64)
+    assert len(chunks) >= 2
+    assert sum(len(c.text) for c in chunks) >= len(text)
+
+
+def test_long_token_without_spaces_splits_by_max_chars():
+    """Cuando una sola pieza (sin separadores) excede max_chars, se corta."""
+    text = "preludio\n\n" + ("z" * 5000) + "\n\nepilogo"
+    doc = ExtractedDoc(text=text, extractor="text")
+    chunks = chunk_text(doc, chunk_size=512, overlap=0)
+    # La 'z'*5000 debe partirse en pedazos <= 2048 chars
+    z_chunks = [c for c in chunks if c.text.strip().startswith("z")]
+    assert all(len(c.text) <= 2048 for c in z_chunks)

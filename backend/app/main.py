@@ -36,24 +36,34 @@ from app.services import watcher_service
 
 
 async def _cleanup_orphans() -> None:
-    """Elimina FileDocs cuya Source ya no existe (race condition al borrar fuentes)."""
+    """Elimina FileDocs cuya Source ya no existe (race condition al borrar fuentes).
+
+    Filtra con `$nin` en MongoDB y solo trae los _id necesarios — antes cargaba
+    todos los FileDocs en memoria, lento con 100k+ ficheros.
+    """
     from app.core.database import get_vector_service
     from app.models.file import FileDoc
     from app.models.source import Source
 
-    source_ids = {str(s.id) for s in await Source.find().to_list()}
-    all_files = await FileDoc.find().to_list()
-    orphans = [f for f in all_files if str(f.sourceId) not in source_ids]
-    if not orphans:
+    sources_col = Source.get_pymongo_collection()
+    source_ids = [doc["_id"] async for doc in sources_col.find({}, projection={"_id": 1})]
+    files_col = FileDoc.get_pymongo_collection()
+    orphans_cursor = files_col.find(
+        {"sourceId": {"$nin": source_ids}},
+        projection={"_id": 1},
+    )
+    orphan_ids = [doc["_id"] async for doc in orphans_cursor]
+    if not orphan_ids:
         return
+
     vs = get_vector_service()
-    for f in orphans:
+    for fid in orphan_ids:
         try:
-            await asyncio.to_thread(vs.delete_by_file, str(f.id))
+            await asyncio.to_thread(vs.delete_by_file, str(fid))
         except Exception:
             pass
-        await f.delete()
-    print(f"[seekpal] Limpiados {len(orphans)} ficheros huérfanos.")
+    await files_col.delete_many({"_id": {"$in": orphan_ids}})
+    print(f"[seekpal] Limpiados {len(orphan_ids)} ficheros huérfanos.")
 
 
 @asynccontextmanager

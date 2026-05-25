@@ -25,6 +25,11 @@ import psutil
 _PROVIDER_PREF_FILE = Path(__file__).resolve().parents[2] / ".provider_preference"
 _VALID_PREFS = {"auto", "cpu", "cuda", "directml"}
 
+# Tiempo entre devolver la respuesta HTTP y exit(99). 0.3s era ajustado: en
+# redes lentas el cliente perdia la respuesta. 1.5s da margen para que uvicorn
+# termine de enviar el body y el frontend reciba {"status":"restarting"}.
+_RESTART_DELAY_S = 1.5
+
 
 def get_provider_preference() -> str:
     """Lee la preferencia guardada. Devuelve 'auto' si no existe o es invalida."""
@@ -276,7 +281,7 @@ async def install_gpu_package(pkg: str) -> None:
         _install_status = "error"
         _install_error = str(exc)
         return
-    asyncio.get_event_loop().call_later(0.3, lambda: os._exit(99))
+    asyncio.get_running_loop().call_later(_RESTART_DELAY_S, lambda: os._exit(99))
 
 
 async def switch_provider(target: str) -> None:
@@ -355,9 +360,9 @@ async def switch_provider(target: str) -> None:
         _install_status = "error"
         _install_error = str(exc)
         return
-    asyncio.get_event_loop().call_later(0.3, lambda: os._exit(99))
+    asyncio.get_running_loop().call_later(_RESTART_DELAY_S, lambda: os._exit(99))
 
 
 def restart_app() -> None:
     """Reinicia SeekPal vía exit code 99 (start.bat lo detecta y relanza)."""
-    asyncio.get_event_loop().call_later(0.3, lambda: os._exit(99))
+    asyncio.get_running_loop().call_later(_RESTART_DELAY_S, lambda: os._exit(99))
