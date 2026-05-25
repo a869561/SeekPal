@@ -10,3 +10,9 @@ class SettingsPatch(BaseModel):
     theme: str | None = None
     fontSize: str | None = None
     language: str | None = None
+    # RAG / multimedia (requieren reinicio para que entren en efecto)
+    rerankerEnabled: bool | None = None
+    whisperModel: str | None = None
+    indexMultimedia: bool | None = None
+    videoFrameInterval: int | None = None
+    videoMaxFrames: int | None = None

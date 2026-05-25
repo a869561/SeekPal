@@ -4,6 +4,7 @@ import FontSizeSelector from "../components/settings/FontSizeSelector.jsx";
 import LanguageSelector from "../components/settings/LanguageSelector.jsx";
 import ChangePassword from "../components/settings/ChangePassword.jsx";
 import HardwareCard from "../components/settings/HardwareCard.jsx";
+import RagSettingsCard from "../components/settings/RagSettingsCard.jsx";
 
 export default function SettingsPage() {
   const { t } = useTranslation();
@@ -23,6 +24,11 @@ export default function SettingsPage() {
           <ThemeSelector />
           <FontSizeSelector />
           <LanguageSelector />
+
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 px-1 pt-2">
+            {t("settings.rag")}
+          </h2>
+          <RagSettingsCard />
         </div>
 
         <div className="space-y-4">

@@ -15,11 +15,14 @@ from pathlib import Path
 from threading import Lock
 from typing import TYPE_CHECKING
 
+from app.core import runtime_settings
+
 if TYPE_CHECKING:
     from faster_whisper import WhisperModel
 
 
-_DEFAULT_MODEL = os.getenv("SEEKPAL_WHISPER_MODEL", "small")
+# Defaults if runtime_settings hasn't been loaded yet (e.g. tests).
+# El env var SEEKPAL_WHISPER_MODEL sigue funcionando como override.
 _DEFAULT_LANG = os.getenv("SEEKPAL_WHISPER_LANG", "auto")  # auto = detect
 
 _model: "WhisperModel | None" = None
@@ -52,18 +55,25 @@ def _detect_device() -> tuple[str, str]:
 
 
 def get_whisper() -> "WhisperModel | None":
-    """Devuelve el modelo Whisper (carga lazy). None si falla la inicializacion."""
+    """Devuelve el modelo Whisper (carga lazy). None si falla la inicializacion.
+
+    El nombre del modelo se lee de runtime_settings (override env:
+    SEEKPAL_WHISPER_MODEL). Valores validos: tiny | base | small | medium | large.
+    """
     global _model, _init_error
     if _model is not None:
         return _model
     with _lock:
         if _model is not None:
             return _model
+        model_name = os.getenv("SEEKPAL_WHISPER_MODEL") or runtime_settings.get(
+            "whisperModel", "small"
+        )
         try:
             from faster_whisper import WhisperModel
             device, compute_type = _detect_device()
-            print(f"[seekpal] Whisper: cargando '{_DEFAULT_MODEL}' en {device} ({compute_type})...")
-            _model = WhisperModel(_DEFAULT_MODEL, device=device, compute_type=compute_type)
+            print(f"[seekpal] Whisper: cargando '{model_name}' en {device} ({compute_type})...")
+            _model = WhisperModel(model_name, device=device, compute_type=compute_type)
             print(f"[seekpal] Whisper: listo")
         except Exception as exc:  # noqa: BLE001
             _init_error = str(exc)

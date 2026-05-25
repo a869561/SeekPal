@@ -6,6 +6,7 @@ from pathlib import Path
 from beanie import init_beanie
 from motor.motor_asyncio import AsyncIOMotorClient
 
+from app.core import runtime_settings
 from app.core.config import settings
 from app.models.config import Config
 from app.models.file import FileDoc
@@ -51,6 +52,15 @@ async def connect_database() -> None:
     db = _client[settings.mongo_db]
     await init_beanie(database=db, document_models=[Config, Source, FileDoc])
 
+    # Cargar ajustes runtime de Mongo (reranker on/off, modelo Whisper, etc.)
+    # antes de inicializar los servicios que dependen de ellos.
+    try:
+        cfg = await Config.find_one()
+        if cfg is not None:
+            runtime_settings.load_runtime_settings(cfg.settings)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[seekpal] No se pudieron leer ajustes runtime: {exc}")
+
     qdrant_abs = _resolve_qdrant_path()
     _vector_service = VectorService(
         path=qdrant_abs,
@@ -68,8 +78,11 @@ async def connect_database() -> None:
 
     # Reranker opcional — si falla la carga (modelo no soportado por FastEmbed,
     # version vieja, sin red en first-run), se sigue con retrieval simple.
+    # runtime_settings tiene prioridad sobre el flag estatico de config.py
+    # (el usuario puede desactivarlo desde Settings UI).
     _reranker_service = None
-    if settings.rag_reranker_enabled:
+    reranker_enabled = runtime_settings.get("rerankerEnabled", settings.rag_reranker_enabled)
+    if reranker_enabled:
         try:
             _reranker_service = RerankerService(model=settings.rag_reranker_model)
         except Exception as exc:  # noqa: BLE001

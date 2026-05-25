@@ -21,7 +21,25 @@
     "subtitle":   "Application configuration",
     "appearance": "Appearance",
     "security":   "Security",
-    "hardware":   "Hardware"
+    "hardware":   "Hardware",
+    "rag":        "Search and multimedia"
+  },
+  "ragSettings": {
+    "title":                "Search and multimedia",
+    "reranker":             "Reranker (cross-encoder)",
+    "rerankerHint":         "Reorders results with a more accurate model. Boosts relevance by 5-10%.",
+    "indexMultimedia":      "Index audio, image and video",
+    "indexMultimediaHint":  "Enables AI transcription and captioning. If off, only text and documents are indexed.",
+    "whisperModel":         "Audio transcription model",
+    "frameInterval":        "Frame interval (video)",
+    "maxFrames":            "Max frames per video",
+    "restartRequired":      "These changes require restarting SeekPal",
+    "apply":                "Apply",
+    "applyRestart":         "Apply and restart",
+    "saving":               "Saving...",
+    "restarting":           "Restarting...",
+    "done":                 "✅ Settings applied",
+    "error":                "Error saving settings"
   },
   "hardware": {
     "title":          "Detected components",

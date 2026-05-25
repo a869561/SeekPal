@@ -15,14 +15,28 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from app.core import runtime_settings
 from app.services.rag.audio_service import transcribe
 from app.services.rag.extractors.base import BaseExtractor
 from app.services.rag.image_service import caption_image
 from app.services.rag.types import ExtractedDoc
 
 
-_FRAME_INTERVAL_SECONDS = int(os.getenv("SEEKPAL_VIDEO_FRAME_INTERVAL", "30"))
-_MAX_FRAMES = int(os.getenv("SEEKPAL_VIDEO_MAX_FRAMES", "20"))
+def _frame_interval() -> int:
+    """Segundos entre frames muestreados. Env override > runtime_settings > 30."""
+    env = os.getenv("SEEKPAL_VIDEO_FRAME_INTERVAL")
+    if env:
+        try: return int(env)
+        except ValueError: pass
+    return int(runtime_settings.get("videoFrameInterval", 30))
+
+
+def _max_frames() -> int:
+    env = os.getenv("SEEKPAL_VIDEO_MAX_FRAMES")
+    if env:
+        try: return int(env)
+        except ValueError: pass
+    return int(runtime_settings.get("videoMaxFrames", 20))
 
 
 def _ffmpeg_bin() -> str:
@@ -54,7 +68,7 @@ def _extract_frames(video: Path, out_dir: Path, interval: int) -> list[Path]:
         _ffmpeg_bin(), "-y", "-loglevel", "error",
         "-i", str(video),
         "-vf", f"fps=1/{interval}",
-        "-frames:v", str(_MAX_FRAMES),
+        "-frames:v", str(_max_frames()),
         str(out_dir / "frame_%04d.jpg"),
     ]
     try:
@@ -78,6 +92,7 @@ class VideoExtractor(BaseExtractor):
 
     def extract(self, path: Path) -> ExtractedDoc:
         parts: list[str] = []
+        interval = _frame_interval()
         with tempfile.TemporaryDirectory(prefix="seekpal_video_") as tmpdir:
             tmp = Path(tmpdir)
 
@@ -89,13 +104,13 @@ class VideoExtractor(BaseExtractor):
                     parts.append(f"Transcripcion del audio:\n{transcript}")
 
             # 2) Frames -> captions con timestamp
-            frames = _extract_frames(path, tmp, _FRAME_INTERVAL_SECONDS)
+            frames = _extract_frames(path, tmp, interval)
             if frames:
                 captions: list[str] = []
                 for i, frame in enumerate(frames):
                     cap = caption_image(frame)
                     if cap:
-                        captions.append(f"[{_timestamp(i, _FRAME_INTERVAL_SECONDS)}] {cap}")
+                        captions.append(f"[{_timestamp(i, interval)}] {cap}")
                 if captions:
                     parts.append("Escenas visuales:\n" + "\n".join(captions))
 

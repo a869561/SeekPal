@@ -21,7 +21,25 @@
     "subtitle":   "Configuración de la aplicación",
     "appearance": "Apariencia",
     "security":   "Seguridad",
-    "hardware":   "Hardware"
+    "hardware":   "Hardware",
+    "rag":        "Búsqueda y multimedia"
+  },
+  "ragSettings": {
+    "title":                "Búsqueda y multimedia",
+    "reranker":             "Reranker (cross-encoder)",
+    "rerankerHint":         "Reordena los resultados con un modelo más preciso. Mejora la relevancia un 5–10%.",
+    "indexMultimedia":      "Indexar audio, imagen y vídeo",
+    "indexMultimediaHint":  "Activa la transcripción y descripción con IA. Si lo desactivas, solo se indexan texto y documentos.",
+    "whisperModel":         "Modelo de transcripción de audio",
+    "frameInterval":        "Intervalo de frames (vídeo)",
+    "maxFrames":            "Máx. frames por vídeo",
+    "restartRequired":      "Estos cambios requieren reiniciar SeekPal",
+    "apply":                "Aplicar",
+    "applyRestart":         "Aplicar y reiniciar",
+    "saving":               "Guardando…",
+    "restarting":           "Reiniciando…",
+    "done":                 "✅ Ajustes aplicados",
+    "error":                "Error al guardar los ajustes"
   },
   "hardware": {
     "title":          "Componentes detectados",

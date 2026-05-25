@@ -208,9 +208,17 @@ async def _index_text_documents(
     except RuntimeError:
         return
 
+    # Master switch: si el usuario desactiva multimedia desde Settings,
+    # solo indexamos texto/documento. Los ficheros multimedia ya indexados
+    # permanecen en Qdrant hasta el siguiente borrado de fuente.
+    from app.core import runtime_settings
+    categories = ["text", "document"]
+    if runtime_settings.get("indexMultimedia", True):
+        categories.extend(["image", "audio", "video"])
+
     query = FileDoc.find(
         FileDoc.sourceId == source_id,
-        In(FileDoc.category, ["text", "document", "image", "audio", "video"]),
+        In(FileDoc.category, categories),
     )
     files = await query.to_list()
     total = len(files)
