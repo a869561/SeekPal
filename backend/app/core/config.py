@@ -49,6 +49,13 @@ class Settings(BaseSettings):
     rag_multi_query_enabled: bool = True
     rag_multi_query_n: int = 3
 
+    # Thinking mode (Qwen3 / DeepSeek-R1): el LLM genera razonamiento extendido
+    # antes de la respuesta. Mejora la calidad en preguntas complejas a costa
+    # de mayor latencia (~2-5 s extra en CPU). Desactivado por defecto para
+    # mantener la respuesta rapida en el caso de uso tipico de RAG.
+    # El razonamiento se emite como eventos SSE {"type": "thinking"} separados.
+    rag_thinking_enabled: bool = False
+
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=False, extra="ignore")
 
 

@@ -89,11 +89,12 @@ async def ask(body: AskRequest, request: Request):
                 yield {"data": json.dumps({"type": "done"})}
                 return
 
-            async for token in generation.generate_stream(body.question, chunks):
+            async for event_type, text in generation.generate_stream(body.question, chunks):
                 if await request.is_disconnected():
                     return
-                if token:
-                    yield {"data": json.dumps({"type": "token", "text": token})}
+                if text:
+                    # event_type es "token" (respuesta) o "thinking" (razonamiento)
+                    yield {"data": json.dumps({"type": event_type, "text": text})}
 
             yield {"data": json.dumps({"type": "done"})}
 

@@ -129,6 +129,7 @@ async def connect_database() -> None:
     _generation_service = GenerationService(
         base_url=settings.ollama_url,
         model=settings.llm_model,
+        thinking=settings.rag_thinking_enabled,
     )
 
     return qdrant_abs

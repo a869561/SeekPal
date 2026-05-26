@@ -3,9 +3,21 @@
 build_prompt usa str.replace() con placeholders únicos (<<<...>>>) para evitar
 conflictos con llaves literales en el texto de los chunks.
 
-GenerationService tambien expone expand_query() para multi-query retrieval:
-pide al LLM N reformulaciones de la pregunta original (sinonimos, distintos
-angulos) que se usan para sobre-cubrir el espacio semantico antes del retrieval.
+GenerationService expone:
+  - generate_stream()  → stream de tokens con filtro de razonamiento
+  - expand_query()     → reformulaciones de la pregunta para multi-query retrieval
+
+Modo thinking (Qwen3):
+  Cuando thinking=True se pasa `think: true` a Ollama, lo que hace que el LLM
+  genere un bloque de razonamiento extendido antes de responder. Ese bloque
+  aparece dentro de etiquetas <think>...</think> en el token stream.
+
+  _think_filter() actua como filtro de streaming stateful:
+    - Tokens dentro de <think>...</think> → yielded como ("thinking", text)
+    - Tokens fuera → yielded como ("token", text)
+
+  Con thinking=False (por defecto) el filtro igualmente limpia cualquier bloque
+  <think> que el modelo emita de forma espontanea (ej. expand_query).
 """
 
 from __future__ import annotations
@@ -57,25 +69,117 @@ def _clean_variant(line: str) -> str:
     return s
 
 
+def _safe_split(text: str, tag: str) -> tuple[str, str]:
+    """Divide text en (seguro_de_emitir, retener_en_buffer).
+
+    El segmento retenido es el sufijo mas largo de text que sea un prefijo
+    propio de tag (es decir, podria completarse en el siguiente token).
+    Si ningun sufijo coincide, retorna ("", text) si text esta vacio o
+    (text, "") si no hay coincidencia posible.
+    """
+    max_check = min(len(text), len(tag) - 1)
+    for length in range(max_check, 0, -1):
+        if tag.startswith(text[-length:]):
+            return text[:-length], text[-length:]
+    return text, ""
+
+
+async def _think_filter(
+    raw_stream: AsyncGenerator[str, None],
+) -> AsyncGenerator[tuple[str, str], None]:
+    """Separa tokens de respuesta de bloques <think>...</think>.
+
+    Implementa una maquina de estados sobre el stream de tokens. No acumula
+    toda la respuesta — emite tokens en cuanto puede garantizar que no son
+    parte de una etiqueta incompleta.
+
+    Yields:
+      ("token", text)    → contenido de la respuesta para el usuario
+      ("thinking", text) → razonamiento interno del modelo (para UI opcional)
+    """
+    OPEN_TAG = "<think>"
+    CLOSE_TAG = "</think>"
+
+    buffer = ""
+    in_think = False
+
+    async for chunk in raw_stream:
+        buffer += chunk
+
+        while buffer:
+            tag = CLOSE_TAG if in_think else OPEN_TAG
+            tag_pos = buffer.find(tag)
+
+            if tag_pos >= 0:
+                # Etiqueta encontrada: emitir contenido previo y cambiar estado
+                before = buffer[:tag_pos]
+                if before:
+                    yield ("thinking" if in_think else "token", before)
+                buffer = buffer[tag_pos + len(tag):]
+                in_think = not in_think
+                # Continuar el while para procesar el resto del buffer
+            else:
+                # Etiqueta no encontrada: emitir la parte segura, retener el resto
+                safe, keep = _safe_split(buffer, tag)
+                if safe:
+                    yield ("thinking" if in_think else "token", safe)
+                buffer = keep
+                break  # Esperar mas tokens
+
+    # Vaciar buffer restante al cerrar el stream
+    if buffer:
+        yield ("thinking" if in_think else "token", buffer)
+
+
 class GenerationService:
-    def __init__(self, base_url: str, model: str):
+    def __init__(self, base_url: str, model: str, thinking: bool = False):
         self._client = AsyncClient(host=base_url, timeout=120.0)
         self._model = model
+        self._thinking = thinking
+        if thinking:
+            logger.info("GenerationService: modo thinking activado (Qwen3)")
 
     async def generate_stream(
         self, question: str, chunks: list[RetrievedChunk]
-    ) -> AsyncGenerator[str, None]:
+    ) -> AsyncGenerator[tuple[str, str], None]:
+        """Genera la respuesta en streaming con filtro de razonamiento.
+
+        Yields tuplas (event_type, text):
+          ("token", text)    → fragmentos de la respuesta para el usuario
+          ("thinking", text) → razonamiento interno (si thinking=True o el
+                               modelo lo emite espontaneamente)
+
+        Cuando thinking=True se activa el modo de razonamiento extendido de
+        Qwen3 via la opcion `think` de Ollama. El LLM genera mas contexto
+        interno antes de responder, mejorando la calidad en preguntas complejas
+        a costa de mayor latencia (~2-5 s extra en CPU).
+        """
+        options: dict = {"temperature": 0.2, "num_ctx": 8192}
+        if self._thinking:
+            options["think"] = True  # Activar thinking en Ollama (Qwen3/DeepSeek-R1)
+
         prompt = build_prompt(question, chunks)
         messages = [{"role": "user", "content": prompt}]
-        async for part in await self._client.chat(
-            model=self._model,
-            messages=messages,
-            stream=True,
-            options={"temperature": 0.2, "num_ctx": 8192},
-        ):
-            yield part.message.content or ""
-            if part.done:
-                break
+
+        async def _raw_tokens() -> AsyncGenerator[str, None]:
+            async for part in await self._client.chat(
+                model=self._model,
+                messages=messages,
+                stream=True,
+                options=options,
+            ):
+                # Ollama >= 0.9 puede exponer el thinking en campo separado;
+                # lo envolvemos en etiquetas para que _think_filter lo procese
+                # de forma uniforme independientemente de la version de Ollama.
+                thinking_field = getattr(part.message, "thinking", None) or ""
+                if thinking_field:
+                    yield f"<think>{thinking_field}</think>"
+                yield part.message.content or ""
+                if part.done:
+                    break
+
+        async for event in _think_filter(_raw_tokens()):
+            yield event
 
     async def expand_query(self, question: str, n: int = 3) -> list[str]:
         """Pide al LLM N reformulaciones de la pregunta para multi-query retrieval.
