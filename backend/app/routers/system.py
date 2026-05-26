@@ -139,6 +139,23 @@ async def set_provider(body: SetProviderRequest, background_tasks: BackgroundTas
     return ok({"status": "installing", "target": target})
 
 
+@router.get("/model-status")
+async def model_status():
+    """Estado de carga de modelos lazy (Whisper, Docling, OCR, Captioning).
+
+    Valores posibles por modelo:
+      "pending"  → nunca usado en esta sesion (se cargara al primer fichero)
+      "loading"  → descargando/inicializando ahora (~10-20 s la primera vez)
+      "ready"    → cargado y listo
+      "disabled" → fallo al cargar (ver logs del backend)
+
+    El frontend puede hacer polling de este endpoint durante la indexacion
+    para mostrar indicadores de progreso al usuario.
+    """
+    from app.services.rag._lazy import get_model_status
+    return ok(get_model_status())
+
+
 @router.post("/restart")
 async def restart(force: bool = False):
     """Reinicia SeekPal (aplica cambios de configuración).

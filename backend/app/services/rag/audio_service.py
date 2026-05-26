@@ -67,6 +67,10 @@ def _load_whisper() -> "WhisperModel":
 
 _whisper = LazyService("Whisper", _load_whisper)
 
+# Registrar para que get_model_status() lo incluya en el estado global
+from app.services.rag._lazy import register as _register  # noqa: E402
+_register(_whisper)
+
 
 def get_whisper() -> "WhisperModel | None":
     """Devuelve el modelo Whisper (carga lazy). None si falla la inicializacion.

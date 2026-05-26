@@ -42,6 +42,10 @@ def _load_converter() -> "DocumentConverter":
 
 _converter = LazyService("Docling", _load_converter)
 
+# Registrar para que get_model_status() lo incluya en el estado global
+from app.services.rag._lazy import register as _register  # noqa: E402
+_register(_converter)
+
 
 def is_docling_installed() -> bool:
     """True si la dependencia docling esta importable (sin cargarla)."""

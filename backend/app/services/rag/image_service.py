@@ -51,6 +51,11 @@ def _load_caption_client() -> AsyncClient:
 _ocr = LazyService("OCR", _load_ocr)
 _caption = LazyService("Captioning", _load_caption_client)
 
+# Registrar modelos lazy para que get_model_status() los incluya
+from app.services.rag._lazy import register as _register  # noqa: E402
+_register(_ocr)
+_register(_caption)
+
 
 def ocr_image(path: Path) -> str:
     """Extrae texto de una imagen via OCR. Devuelve "" si no hay texto detectado."""
