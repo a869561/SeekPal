@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 
 from fastapi import APIRouter, Depends, Request
 from ollama import AsyncClient
@@ -10,6 +11,8 @@ from app.core.database import get_generation_service, get_retrieval_service, get
 from app.core.responses import RagErrorCode, ok
 from app.deps.auth import require_auth
 from app.schemas.ask import AskRequest, Citation
+
+logger = logging.getLogger("seekpal.ask")
 
 
 # Cliente HTTP de health: reusable y compartido — antes se creaba uno por
@@ -33,12 +36,40 @@ async def ask(body: AskRequest, request: Request):
             retrieval = get_retrieval_service()
             generation = get_generation_service()
 
-            chunks = await retrieval.retrieve(
-                question=body.question,
-                top_k=body.top_k,
-                source_id=body.source_id,
-                categories=body.categories,
-            )
+            # Multi-query expansion: pide al LLM N reformulaciones de la pregunta
+            # para cubrir sinonimos y angulos distintos antes del retrieval.
+            # Si falla o esta deshabilitado, cae de forma graceful a una sola query.
+            if settings.rag_multi_query_enabled:
+                try:
+                    questions = await generation.expand_query(
+                        body.question, n=settings.rag_multi_query_n
+                    )
+                    logger.debug(
+                        "Multi-query: %d variantes para %r",
+                        len(questions),
+                        body.question[:60],
+                    )
+                    chunks = await retrieval.retrieve_multi(
+                        questions=questions,
+                        top_k=body.top_k,
+                        source_id=body.source_id,
+                        categories=body.categories,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("Multi-query fallo, fallback a single-query: %s", exc)
+                    chunks = await retrieval.retrieve(
+                        question=body.question,
+                        top_k=body.top_k,
+                        source_id=body.source_id,
+                        categories=body.categories,
+                    )
+            else:
+                chunks = await retrieval.retrieve(
+                    question=body.question,
+                    top_k=body.top_k,
+                    source_id=body.source_id,
+                    categories=body.categories,
+                )
 
             citations = [
                 Citation(

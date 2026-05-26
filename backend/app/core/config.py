@@ -42,6 +42,13 @@ class Settings(BaseSettings):
     rag_mmr_enabled: bool = True
     rag_mmr_lambda: float = 0.7
 
+    # Multi-query expansion: el LLM genera N reformulaciones de la pregunta
+    # (sinonimos, distintos angulos) que se usan para recuperar candidatos
+    # adicionales antes de RRF-fusionar. Mejora recall@k en corpus grandes.
+    # n=3 genera 3 variantes + la pregunta original = 4 queries en total.
+    rag_multi_query_enabled: bool = True
+    rag_multi_query_n: int = 3
+
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=False, extra="ignore")
 
 

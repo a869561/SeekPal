@@ -25,6 +25,40 @@ def _cosine(a: list[float], b: list[float]) -> float:
     return dot / (na * nb)
 
 
+def _rrf_fuse(
+    rankings: list[list[RetrievedChunk]],
+    k: int = 60,
+) -> list[RetrievedChunk]:
+    """Reciprocal Rank Fusion sobre N rankings de chunks.
+
+    score_rrf(c) = sum(1 / (k + rank_i(c))) para cada ranking donde c aparece.
+    k=60 es el valor estandar del paper original (Cormack et al. 2009).
+
+    Devuelve los chunks unicos (por chunk_id) ordenados por score RRF descendente.
+    El score original del chunk se reemplaza por el score RRF."""
+    if not rankings:
+        return []
+    if len(rankings) == 1:
+        return rankings[0]
+
+    accumulator: dict[str, tuple[RetrievedChunk, float]] = {}
+    for ranking in rankings:
+        for rank, chunk in enumerate(ranking):
+            contribution = 1.0 / (k + rank + 1)
+            if chunk.chunk_id in accumulator:
+                existing_chunk, existing_score = accumulator[chunk.chunk_id]
+                accumulator[chunk.chunk_id] = (existing_chunk, existing_score + contribution)
+            else:
+                accumulator[chunk.chunk_id] = (chunk, contribution)
+
+    fused = []
+    for chunk, score in accumulator.values():
+        chunk.score = score
+        fused.append(chunk)
+    fused.sort(key=lambda c: c.score, reverse=True)
+    return fused
+
+
 def _mmr_select(
     candidates: list[RetrievedChunk],
     query_vec: list[float],
@@ -89,12 +123,16 @@ def _mmr_select(
 class RetrievalService:
     """Recupera chunks combinando hybrid search (dense + sparse) con reranking opcional.
 
-    Si hay reranker activo:
-      1. Vector search devuelve `top_k * multiplier` candidatos (sobre-recupera).
-      2. Reranker reordena con cross-encoder mas preciso.
-      3. Devolvemos los top_k mejores tras el rerank.
+    Flujo single-query (retrieve):
+      1. Embed query (dense + sparse) en paralelo.
+      2. Hybrid search Qdrant con RRF (recupera top_k * multiplier candidatos).
+      3. Reranker cross-encoder (opcional) reordena con mayor precision.
+      4. MMR (opcional) diversifica el top_k final.
 
-    Sin reranker, vector search devuelve directamente top_k.
+    Flujo multi-query (retrieve_multi):
+      Como el anterior, pero repite los pasos 1-2 para cada variante de la
+      pregunta en paralelo, RRF-funde todos los rankings en uno y aplica
+      reranker + MMR una sola vez sobre el conjunto unificado.
     """
 
     def __init__(
@@ -115,35 +153,27 @@ class RetrievalService:
         self._mmr_enabled = mmr_enabled
         self._mmr_lambda = max(0.0, min(1.0, mmr_lambda))
 
-    async def retrieve(
+    def _build_filters(
         self,
-        question: str,
-        top_k: int,
-        source_id: str | None = None,
-        categories: list[str] | None = None,
-    ) -> list[RetrievedChunk]:
-        # Sobre-recuperar para dar margen a reranker y/o MMR. Si ambos estan
-        # activos prevalece el multiplier del reranker (mas grande).
-        if self._reranker or self._mmr_enabled:
-            candidate_k = top_k * self._reranker_multiplier
-        else:
-            candidate_k = top_k
-
-        # Embeddings denso y sparse en paralelo
-        dense_vec, sparse_vec = await asyncio.gather(
-            self._embedding.embed_query(question),
-            self._sparse.embed_query(question),
-        )
+        source_id: str | None,
+        categories: list[str] | None,
+    ) -> dict:
         filters: dict = {}
         if source_id is not None:
             filters["source_id"] = source_id
         if categories:
             filters["category"] = categories
+        return filters
 
-        candidates = await asyncio.to_thread(
-            self._vector.search, dense_vec, sparse_vec, candidate_k, filters or None
-        )
-
+    async def _rerank_and_mmr(
+        self,
+        question: str,
+        dense_vec: list[float],
+        candidates: list[RetrievedChunk],
+        top_k: int,
+    ) -> list[RetrievedChunk]:
+        """Aplica reranker (si disponible) y MMR sobre una lista de candidatos.
+        Usado tanto por retrieve() como por retrieve_multi()."""
         if len(candidates) <= 1:
             return candidates[:top_k]
 
@@ -167,10 +197,86 @@ class RetrievalService:
                 chunk_vecs = await self._embedding.embed_texts(
                     [c.text for c in candidates]
                 )
-                return _mmr_select(
-                    candidates, dense_vec, chunk_vecs, top_k, self._mmr_lambda
-                )
+                return _mmr_select(candidates, dense_vec, chunk_vecs, top_k, self._mmr_lambda)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("MMR fallo, usando orden por score: %s", exc)
 
         return candidates[:top_k]
+
+    async def retrieve(
+        self,
+        question: str,
+        top_k: int,
+        source_id: str | None = None,
+        categories: list[str] | None = None,
+    ) -> list[RetrievedChunk]:
+        # Sobre-recuperar para dar margen a reranker y/o MMR.
+        candidate_k = top_k * self._reranker_multiplier if (self._reranker or self._mmr_enabled) else top_k
+
+        # Embeddings denso y sparse en paralelo
+        dense_vec, sparse_vec = await asyncio.gather(
+            self._embedding.embed_query(question),
+            self._sparse.embed_query(question),
+        )
+        filters = self._build_filters(source_id, categories)
+
+        candidates = await asyncio.to_thread(
+            self._vector.search, dense_vec, sparse_vec, candidate_k, filters or None
+        )
+
+        return await self._rerank_and_mmr(question, dense_vec, candidates, top_k)
+
+    async def retrieve_multi(
+        self,
+        questions: list[str],
+        top_k: int,
+        source_id: str | None = None,
+        categories: list[str] | None = None,
+    ) -> list[RetrievedChunk]:
+        """Multi-query retrieval: recupera candidatos para cada formulacion de la
+        pregunta en paralelo y los fusiona con RRF antes de reranking y MMR.
+
+        Mejora el recall cubriendo sinonimos y angulos distintos del mismo tema.
+        El reranker y MMR se aplican una sola vez sobre el conjunto unificado,
+        usando siempre la pregunta ORIGINAL (questions[0]) como referencia.
+        """
+        if not questions:
+            return []
+        if len(questions) == 1:
+            return await self.retrieve(questions[0], top_k, source_id, categories)
+
+        candidate_k = top_k * self._reranker_multiplier
+        filters = self._build_filters(source_id, categories)
+
+        # Embeddings denso+sparse para todas las queries en paralelo
+        query_vecs: list[tuple[list[float], object]] = list(
+            await asyncio.gather(
+                *[
+                    asyncio.gather(
+                        self._embedding.embed_query(q),
+                        self._sparse.embed_query(q),
+                    )
+                    for q in questions
+                ]
+            )
+        )
+
+        # Busqueda Qdrant para cada query en paralelo
+        per_query_results: list[list[RetrievedChunk]] = list(
+            await asyncio.gather(
+                *[
+                    asyncio.to_thread(
+                        self._vector.search,
+                        dense_vec, sparse_vec, candidate_k, filters or None,
+                    )
+                    for dense_vec, sparse_vec in query_vecs
+                ]
+            )
+        )
+
+        # RRF-funde todos los rankings en uno unico
+        candidates = _rrf_fuse(per_query_results)
+
+        # Reranker y MMR usando la pregunta ORIGINAL (questions[0])
+        original_dense = query_vecs[0][0]
+        return await self._rerank_and_mmr(questions[0], original_dense, candidates, top_k)
