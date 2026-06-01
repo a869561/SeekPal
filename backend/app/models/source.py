@@ -20,6 +20,9 @@ class Source(Document):
     status: SourceStatus = "idle"
     lastIngested: datetime | None = None
     fileCount: int = 0
+    indexedCount: int = 0
+    skippedCount: int = 0
+    failedCount: int = 0
     autoIndex: bool = False
     createdAt: datetime = Field(default_factory=_now_utc)
     updatedAt: datetime = Field(default_factory=_now_utc)

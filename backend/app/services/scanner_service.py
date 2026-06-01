@@ -7,6 +7,7 @@ Los documentos se vuelcan por lotes a Mongo mediante operaciones bulk upsert.
 
 import asyncio
 import logging
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Awaitable, Callable
@@ -129,12 +130,29 @@ async def ingest_source(
     if source is None:
         raise ValueError("Fuente no encontrada")
 
+    src_label = f"{source.name}"
     source.status = "scanning"
     await source.save()
+
+    t_ingest_start = time.perf_counter()
+    logger.info("[%s] Iniciando ingesta: %s", src_label, source.path)
 
     try:
         all_paths = await asyncio.to_thread(_walk, Path(source.path))
         total = len(all_paths)
+        logger.info("[%s] Encontrados %d ficheros indexables", src_label, total)
+
+        # Purga la indexacion anterior antes de reingestar. Los FileDoc se
+        # recrean con un _id nuevo en cada ingesta, y como el chunk_id de Qdrant
+        # deriva de ese _id, los vectores del intento previo quedarian huerfanos
+        # (mismo source_id, file_id viejo) y seguirian apareciendo en busquedas.
+        # Borrar por source_id deja Qdrant limpio para esta fuente.
+        try:
+            from app.core.database import get_vector_service
+            vector = get_vector_service()
+            await asyncio.to_thread(vector.delete_by_source, str(source_id))
+        except Exception as exc:
+            logger.warning("[%s] No se pudieron purgar vectores previos: %s", src_label, exc)
 
         await FileDoc.find(FileDoc.sourceId == source_id).delete()
 
@@ -168,10 +186,11 @@ async def ingest_source(
         if ops_buffer:
             await FileDoc.get_pymongo_collection().bulk_write(ops_buffer, ordered=False)
 
+        rag_stats: dict[str, int] | None = None
         try:
-            await _index_text_documents(source_id, on_progress=on_progress)
+            rag_stats = await _index_text_documents(source_id, src_label=src_label, on_progress=on_progress)
         except Exception as exc:
-            logger.error("RAG indexing failed for source %s: %s", source_id, exc)
+            logger.error("[%s] RAG indexing fallido: %s", src_label, exc)
 
         # Guard: source may have been deleted while ingestion was running
         if await Source.get(source_id) is None:
@@ -182,18 +201,29 @@ async def ingest_source(
         source.status = "done"
         source.lastIngested = datetime.now(UTC)
         source.fileCount = file_count
+        if rag_stats is not None:
+            source.indexedCount = rag_stats["indexed"]
+            source.skippedCount = rag_stats["skipped"]
+            source.failedCount = rag_stats["failed"]
         await source.save()
+
+        elapsed = time.perf_counter() - t_ingest_start
+        m, s = divmod(int(elapsed), 60)
+        logger.info("[%s] Ingesta finalizada: %d ficheros totales — %dm %ds",
+                    src_label, file_count, m, s)
     except Exception:
         if await Source.get(source_id) is not None:
             source.status = "error"
             await source.save()
+        logger.error("[%s] Ingesta terminada con error", src_label)
         raise
 
 
 async def _index_text_documents(
     source_id: PydanticObjectId,
+    src_label: str = "",
     on_progress: ProgressCallback | None = None,
-) -> None:
+) -> dict[str, int]:
     """Indexación RAG en grupos de _INDEX_GROUP ficheros.
 
     Cada grupo pasa por tres fases: extracción+chunking en paralelo,
@@ -215,7 +245,7 @@ async def _index_text_documents(
         index_service = get_index_service()
     except RuntimeError:
         logger.warning("RAG indexing saltado: IndexService no inicializado (source %s)", source_id)
-        return
+        return {"indexed": 0, "skipped": 0, "failed": 0, "chunks": 0}
 
     # Master switch: si el usuario desactiva multimedia desde Settings,
     # solo indexamos texto/documento. Los ficheros multimedia ya indexados
@@ -232,7 +262,7 @@ async def _index_text_documents(
     files = await query.to_list()
     total = len(files)
     if not files:
-        return
+        return {"indexed": 0, "skipped": 0, "failed": 0, "chunks": 0}
 
     src_str = str(source_id)
     from app.services.rag.index_service import PreparedFile
@@ -288,8 +318,23 @@ async def _index_text_documents(
     indexed = 0    # ficheros ya almacenados en Qdrant (avanza en fase 3)
     extracted = 0  # ficheros ya extraídos (avanza en fase 1, cumulative entre grupos)
 
+    # Contadores globales para el resumen final
+    cnt_indexed = 0
+    cnt_skipped = 0
+    cnt_failed  = 0
+    cnt_chunks  = 0
+    t_rag_start = time.perf_counter()
+
+    logger.info("[%s] RAG: %d ficheros a indexar", src_label, total)
+
     for group_start in range(0, total, _INDEX_GROUP):
         group = files[group_start : group_start + _INDEX_GROUP]
+        group_end = min(group_start + _INDEX_GROUP, total)
+        t_group = time.perf_counter()
+        logger.info(
+            "[%s] Grupo %d–%d / %d: extrayendo %d ficheros...",
+            src_label, group_start + 1, group_end, total, len(group),
+        )
 
         # Punto de pausa entre grupos
         await _pause_event(src_str).wait()
@@ -299,9 +344,22 @@ async def _index_text_documents(
 
         async def _prepare_tracked(fd, idx, _grp=prepared_group):
             nonlocal extracted
+            if on_progress:
+                await on_progress(extracted, -total, f"__extract__:{fd.name}")
+            t0 = time.perf_counter()
             result = await _prepare(fd)
+            dt = time.perf_counter() - t0
             _grp[idx] = result
             extracted += 1
+            if result is not None and not result.skipped:
+                logger.info("[%s]   ✓ %s — %d chunks (%.1fs)",
+                            src_label, fd.name, len(result.chunks), dt)
+            elif result is not None and result.error:
+                logger.warning("[%s]   ✗ %s — %s (%.1fs)",
+                               src_label, fd.name, result.error, dt)
+            else:
+                logger.info("[%s]   · %s — vacío/sin texto (%.1fs)",
+                            src_label, fd.name, dt)
             if on_progress:
                 await on_progress(extracted, -total, f"__extract__:{fd.name}")
             return result
@@ -320,6 +378,10 @@ async def _index_text_documents(
         total_chunks = len(all_texts)
 
         if total_chunks > 0:
+            logger.info(
+                "[%s] Embedding %d chunks del grupo %d–%d...",
+                src_label, total_chunks, group_start + 1, group_end,
+            )
             if on_progress:
                 # Marca el cambio de fase extracting → embedding para el frontend
                 await on_progress(0, -total, "__embedding__")
@@ -348,12 +410,18 @@ async def _index_text_documents(
         # Guard: abort if source was deleted during extraction/embedding
         if await Source.get(source_id) is None:
             cleanup_ingest(src_str)
-            return
+            return {"indexed": cnt_indexed, "skipped": cnt_skipped,
+                    "failed": cnt_failed, "chunks": cnt_chunks}
 
         # Phase 3: store in Qdrant + update MongoDB, emit progress per file
+        logger.info(
+            "[%s] Guardando grupo %d–%d en Qdrant (%d ficheros)...",
+            src_label, group_start + 1, group_end, len(group),
+        )
         vec_idx = 0
         for file_doc, prep in zip(group, prepared_group):
             if prep is None:
+                cnt_failed += 1
                 indexed += 1
                 if on_progress:
                     await on_progress(indexed, -total, file_doc.name)
@@ -362,6 +430,10 @@ async def _index_text_documents(
                 status = "skipped" if prep.error in (
                     "skipped", "empty text", "no chunks produced", None
                 ) else "failed"
+                if status == "failed":
+                    cnt_failed += 1
+                else:
+                    cnt_skipped += 1
                 rag = RagMetadata(indexStatus=status, indexedChunks=0,
                                   extractor=prep.extractor, error=prep.error)
             else:
@@ -377,6 +449,11 @@ async def _index_text_documents(
                     extractor=result.extractor,
                     error=result.error,
                 )
+                if result.status == "done":
+                    cnt_indexed += 1
+                    cnt_chunks += result.chunks
+                else:
+                    cnt_failed += 1
 
             file_doc.metadata.rag = rag
             await file_doc.save()
@@ -385,3 +462,13 @@ async def _index_text_documents(
                 await on_progress(indexed, -total, file_doc.name)
 
     cleanup_ingest(src_str)
+
+    dt_rag = time.perf_counter() - t_rag_start
+    m_rag, s_rag = divmod(int(dt_rag), 60)
+    logger.info("[%s] ─────────────────────────────────────────────────────────────", src_label)
+    logger.info(
+        "[%s] RAG completado: %d indexados · %d vacíos · %d errores · %d chunks — %dm %ds",
+        src_label, cnt_indexed, cnt_skipped, cnt_failed, cnt_chunks, m_rag, s_rag,
+    )
+    return {"indexed": cnt_indexed, "skipped": cnt_skipped,
+            "failed": cnt_failed, "chunks": cnt_chunks}

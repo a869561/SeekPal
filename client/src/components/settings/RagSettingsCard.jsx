@@ -1,23 +1,41 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2, CheckCircle, AlertCircle, Sparkles, Mic, Film, Layers, RefreshCw, FileText, Download } from "lucide-react";
+import { Loader2, CheckCircle, AlertCircle, Sparkles, Mic, Film, Layers, RefreshCw, FileText, Download, ScanText } from "lucide-react";
 import { getSettings, saveSettings } from "../../api/settings.js";
 import {
   restartApp, invalidateHardwareCache,
   getDoclingStatus, installDocling,
 } from "../../api/system.js";
 
+const OCR_QUALITY_OPTIONS = [
+  { id: "mobile", sizeMB: 15,  note: "Rápido, texto impreso claro" },
+  { id: "server", sizeMB: 140, note: "Preciso, fuentes estilizadas y juegos" },
+];
+
 const WHISPER_MODELS = [
   { id: "tiny",   sizeMB: 39,   note: "Mas rapido, calidad baja" },
   { id: "base",   sizeMB: 74,   note: "Rapido, calidad moderada" },
-  { id: "small",  sizeMB: 244,  note: "Recomendado (informe v3)" },
+  { id: "small",  sizeMB: 244,  note: "Buena calidad, algo mas lento" },
   { id: "medium", sizeMB: 769,  note: "Mejor calidad, mas lento" },
 ];
+
+// Valores por defecto para campos que el servidor puede devolver como null.
+// Deben coincidir con los ?? fallbacks del JSX para que el formulario no
+// marque un campo como "cambiado" solo por hacer click en él.
+const FIELD_DEFAULTS = {
+  rerankerEnabled: true,
+  whisperModel: "base",
+  useDocling: false,
+  indexMultimedia: true,
+  videoFrameInterval: 30,
+  videoMaxFrames: 20,
+  ocrQuality: "mobile",
+};
 
 // Campos que requieren reiniciar el backend para entrar en efecto
 const RESTART_FIELDS = new Set([
   "rerankerEnabled", "whisperModel", "useDocling", "indexMultimedia",
-  "videoFrameInterval", "videoMaxFrames",
+  "videoFrameInterval", "videoMaxFrames", "ocrQuality",
 ]);
 
 export default function RagSettingsCard() {
@@ -34,8 +52,11 @@ export default function RagSettingsCard() {
   useEffect(() => {
     (async () => {
       try {
+        // getSettings() ya devuelve r.data.data directamente (el objeto de ajustes).
+        // Aplicar defaults para campos que el servidor puede devolver como null,
+        // evitando que interactuar con un campo lo marque como "cambiado".
         const data = await getSettings();
-        const snapshot = data.data || data;
+        const snapshot = { ...FIELD_DEFAULTS, ...data };
         setOriginal(snapshot);
         setForm({ ...snapshot });
       } catch { /* ignore */ }
@@ -105,7 +126,7 @@ export default function RagSettingsCard() {
         await waitForRestart();
         setState("done");
         const fresh = await getSettings();
-        const snapshot = fresh.data || fresh;
+        const snapshot = { ...FIELD_DEFAULTS, ...fresh };
         setOriginal(snapshot);
         setForm({ ...snapshot });
         setTimeout(() => setState("idle"), 3000);
@@ -238,6 +259,28 @@ export default function RagSettingsCard() {
         </div>
       </div>
 
+      {/* Calidad OCR */}
+      <div className="mb-5">
+        <label className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">
+          <ScanText size={13} /> {t("ragSettings.ocrQuality")}
+        </label>
+        <p className="text-xs text-slate-400 dark:text-slate-500 mb-2 ml-5">
+          {t("ragSettings.ocrQualityHint")}
+        </p>
+        <select
+          value={form.ocrQuality || "mobile"}
+          disabled={busy || !(form.indexMultimedia ?? true)}
+          onChange={(e) => update("ocrQuality", e.target.value)}
+          className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-50"
+        >
+          {OCR_QUALITY_OPTIONS.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.id} ({m.sizeMB} MB) — {m.note}
+            </option>
+          ))}
+        </select>
+      </div>
+
       {/* Modelo Whisper */}
       <div className="mb-5">
         <label className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">
@@ -265,10 +308,18 @@ export default function RagSettingsCard() {
           </label>
           <div className="flex items-center gap-2">
             <input
-              type="number" min={5} max={300} step={5}
+              type="number" min={1} max={60} step={1}
               value={form.videoFrameInterval ?? 30}
               disabled={busy || !(form.indexMultimedia ?? true)}
-              onChange={(e) => update("videoFrameInterval", parseInt(e.target.value) || 30)}
+              onChange={(e) => {
+                if (e.target.value === "") { update("videoFrameInterval", ""); return; }
+                const v = parseInt(e.target.value);
+                if (!isNaN(v)) update("videoFrameInterval", Math.min(60, v));
+              }}
+              onBlur={(e) => {
+                const v = parseInt(e.target.value);
+                update("videoFrameInterval", isNaN(v) ? 30 : Math.max(1, Math.min(60, v)));
+              }}
               className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-50"
             />
             <span className="text-xs text-slate-400">s</span>
@@ -279,10 +330,18 @@ export default function RagSettingsCard() {
             {t("ragSettings.maxFrames")}
           </label>
           <input
-            type="number" min={1} max={100}
+            type="number" min={1} max={60}
             value={form.videoMaxFrames ?? 20}
             disabled={busy || !(form.indexMultimedia ?? true)}
-            onChange={(e) => update("videoMaxFrames", parseInt(e.target.value) || 20)}
+            onChange={(e) => {
+              if (e.target.value === "") { update("videoMaxFrames", ""); return; }
+              const v = parseInt(e.target.value);
+              if (!isNaN(v)) update("videoMaxFrames", Math.min(60, v));
+            }}
+            onBlur={(e) => {
+              const v = parseInt(e.target.value);
+              update("videoMaxFrames", isNaN(v) ? 20 : Math.max(1, Math.min(60, v)));
+            }}
             className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-50"
           />
         </div>

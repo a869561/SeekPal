@@ -37,6 +37,8 @@
     "doclingError":         "Error installing Docling. Check backend logs.",
     "indexMultimedia":      "Index audio, image and video",
     "indexMultimediaHint":  "Enables AI transcription and captioning. If off, only text and documents are indexed.",
+    "ocrQuality":           "Image OCR quality",
+    "ocrQualityHint":       "Server models better detect stylised text (games, covers, WEBP). Downloads ~140 MB on first use.",
     "whisperModel":         "Audio transcription model",
     "frameInterval":        "Frame interval (video)",
     "maxFrames":            "Max frames per video",
@@ -45,7 +47,7 @@
     "applyRestart":         "Apply and restart",
     "saving":               "Saving...",
     "restarting":           "Restarting...",
-    "done":                 "✅ Settings applied",
+    "done":                 "Settings applied",
     "error":                "Error saving settings"
   },
   "hardware": {
@@ -61,7 +63,7 @@
     "enableGpu":      "Activate GPU acceleration",
     "downloading":    "Downloading components…",
     "applying":       "Applying changes…",
-    "done":           "✅ GPU acceleration active",
+    "done":           "GPU acceleration active",
     "error":          "Error during activation. Try restarting SeekPal manually.",
     "indexingWarning":"SeekPal is currently indexing files. Pause the indexing and apply changes?",
     "pauseAndApply":  "Pause and apply",
@@ -71,7 +73,7 @@
     "autoOption":     "Automatic (recommended)",
     "autoHint":       "Detects the best engine for your hardware on each startup.",
     "applyButton":    "Apply and restart",
-    "providerApplied":"✅ AI engine updated"
+    "providerApplied":"AI engine updated"
   },
   "theme": {
     "title": "Theme",
@@ -108,6 +110,9 @@
     "emptyState":    "No sources. Add a directory to get started.",
     "fileCount":     "{{count}} files",
     "lastIngest":    "Last indexed: {{date}}",
+    "indexed":       "{{count}} indexed",
+    "empty":         "{{count}} empty",
+    "notIndexed":    "{{count}} not indexed",
     "autoIndexOn":   "Auto-indexing enabled",
     "autoIndexOff":  "Auto-indexing disabled",
     "auto":          "Auto",
@@ -149,15 +154,18 @@
     "progress":   "{{current}} / {{total}} ({{pct}}%)",
     "error":      "Error: {{message}}",
     "embedProgress": "{{current}}/{{total}} vectors ({{pct}}%)",
-    "pause":   "Pause",
-    "resume":  "Resume",
-    "cancel":  "Cancel",
+    "pause":        "Pause",
+    "resume":       "Resume",
+    "cancel":       "Cancel",
+    "file":         "File",
+    "reconnecting": "In progress…",
     "phase": {
-      "scan":       "File scanning",
-      "extracting": "Extracting files",
-      "embedding":  "Generating vectors…",
-      "index":      "AI indexing",
-      "paused":     "Indexing paused"
+      "scan":         "File scanning",
+      "aiProcessing": "AI processing",
+      "extracting":   "Extracting",
+      "embedding":    "Generating vectors",
+      "index":        "Saving to index",
+      "paused":       "Indexing paused"
     }
   },
   "search": {

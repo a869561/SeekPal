@@ -37,6 +37,8 @@
     "doclingError":         "Error instalando Docling. Mira los logs del backend.",
     "indexMultimedia":      "Indexar audio, imagen y vídeo",
     "indexMultimediaHint":  "Activa la transcripción y descripción con IA. Si lo desactivas, solo se indexan texto y documentos.",
+    "ocrQuality":           "Precisión del OCR de imágenes",
+    "ocrQualityHint":       "Los modelos server detectan mejor texto estilizado (juegos, portadas, WEBP). Descarga ~140 MB la primera vez.",
     "whisperModel":         "Modelo de transcripción de audio",
     "frameInterval":        "Intervalo de frames (vídeo)",
     "maxFrames":            "Máx. frames por vídeo",
@@ -45,7 +47,7 @@
     "applyRestart":         "Aplicar y reiniciar",
     "saving":               "Guardando…",
     "restarting":           "Reiniciando…",
-    "done":                 "✅ Ajustes aplicados",
+    "done":                 "Ajustes aplicados",
     "error":                "Error al guardar los ajustes"
   },
   "hardware": {
@@ -61,7 +63,7 @@
     "enableGpu":      "Activar aceleración GPU",
     "downloading":    "Descargando componentes…",
     "applying":       "Aplicando cambios…",
-    "done":           "✅ Aceleración GPU activada",
+    "done":           "Aceleración GPU activada",
     "error":          "Error durante la activación. Reinicia SeekPal manualmente.",
     "indexingWarning":"SeekPal está indexando archivos ahora mismo. ¿Pausar la indexación y aplicar los cambios?",
     "pauseAndApply":  "Pausar y aplicar",
@@ -71,7 +73,7 @@
     "autoOption":     "Automático (recomendado)",
     "autoHint":       "Detecta el mejor motor según tu hardware en cada arranque.",
     "applyButton":    "Aplicar y reiniciar",
-    "providerApplied":"✅ Motor IA actualizado"
+    "providerApplied":"Motor IA actualizado"
   },
   "theme": {
     "title": "Tema",
@@ -108,6 +110,9 @@
     "emptyState":    "No hay fuentes. Añade un directorio para empezar.",
     "fileCount":     "{{count}} ficheros",
     "lastIngest":    "Última ingesta: {{date}}",
+    "indexed":       "{{count}} indexados",
+    "empty":         "{{count}} vacíos",
+    "notIndexed":    "{{count}} sin indexar",
     "autoIndexOn":   "Auto-indexación activada",
     "autoIndexOff":  "Auto-indexación desactivada",
     "auto":          "Auto",
@@ -149,15 +154,18 @@
     "progress":   "{{current}} / {{total}} ({{pct}}%)",
     "error":      "Error: {{message}}",
     "embedProgress": "{{current}}/{{total}} vectores ({{pct}}%)",
-    "pause":   "Pausar",
-    "resume":  "Reanudar",
-    "cancel":  "Cancelar",
+    "pause":        "Pausar",
+    "resume":       "Reanudar",
+    "cancel":       "Cancelar",
+    "file":         "Fichero",
+    "reconnecting": "En progreso…",
     "phase": {
-      "scan":       "Escaneo de archivos",
-      "extracting": "Extrayendo ficheros",
-      "embedding":  "Generando vectores…",
-      "index":      "Indexando con IA",
-      "paused":     "Indexado pausado"
+      "scan":          "Escaneo de archivos",
+      "aiProcessing":  "Procesado con IA",
+      "extracting":    "Extrayendo",
+      "embedding":     "Generando vectores",
+      "index":         "Guardando en índice",
+      "paused":        "Indexado pausado"
     }
   },
   "search": {

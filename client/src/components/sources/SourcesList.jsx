@@ -19,7 +19,11 @@ function formatDate(d) {
 
 export default function SourcesList({ sources, onDelete, onUpdate }) {
   const { t } = useTranslation();
-  const [ingesting, setIngesting] = useState(null);
+  // Si al montar la lista ya hay una fuente en proceso (el usuario volvió a la
+  // página mientras indexaba), mostrar el componente de progreso inmediatamente.
+  const [ingesting, setIngesting] = useState(
+    () => sources.find((s) => s.status === "scanning")?._id ?? null
+  );
   const [togglingId, setTogglingId] = useState(null);
 
   const STATUS_CONFIG = {
@@ -74,6 +78,21 @@ export default function SourcesList({ sources, onDelete, onUpdate }) {
                   <span>{t("sources.fileCount", { count: source.fileCount ?? 0 })}</span>
                   <span>{t("sources.lastIngest", { date: formatDate(source.lastIngested) })}</span>
                 </div>
+                {source.status === "done" && source.lastIngested && (
+                  <div className="flex items-center gap-3 mt-1.5 text-xs">
+                    <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                      {t("sources.indexed", { count: source.indexedCount ?? 0 })}
+                    </span>
+                    <span className="text-slate-400 dark:text-slate-500">
+                      {t("sources.empty", { count: source.skippedCount ?? 0 })}
+                    </span>
+                    <span className={(source.failedCount ?? 0) > 0
+                      ? "text-red-500 dark:text-red-400 font-medium"
+                      : "text-slate-400 dark:text-slate-500"}>
+                      {t("sources.notIndexed", { count: source.failedCount ?? 0 })}
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center gap-2 flex-shrink-0">

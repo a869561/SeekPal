@@ -30,7 +30,7 @@ ebooklib>=0.18
 
 # Multimedia (audio/imagen/video) — perfil MVP del informe v3
 faster-whisper>=1.0
-rapidocr-onnxruntime>=1.3
+rapidocr-onnxruntime>=1.2
 imageio-ffmpeg>=0.5
 
 pytest>=8.3

@@ -28,6 +28,7 @@ _defaults: dict[str, Any] = {
     "indexMultimedia": True,
     "videoFrameInterval": 30,
     "videoMaxFrames": 20,
+    "ocrQuality": "mobile",
 }
 
 _settings: dict[str, Any] = dict(_defaults)

@@ -11,13 +11,12 @@ Ambas piezas son lazy: solo se cargan/usan cuando hay imagenes que indexar.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from ollama import AsyncClient
+from ollama import Client
 
 from app.services.rag._lazy import LazyService
 
@@ -36,20 +35,99 @@ _CAPTION_PROMPT = (
 )
 
 
+def _ensure_server_models() -> "tuple[Path, Path] | None":
+    """Descarga los modelos server de PP-OCRv4 si no están en caché local.
+
+    Busca el directorio de modelos del paquete OCR instalado y descarga
+    los ficheros .onnx desde ModelScope si faltan. Devuelve (det, rec)
+    o None si la descarga falla (el caller usará los modelos mobile).
+    """
+    import importlib.util
+    import urllib.request
+
+    for pkg in ("rapidocr_onnxruntime", "rapidocr"):
+        spec = importlib.util.find_spec(pkg)
+        if spec is not None and spec.origin is not None:
+            models_dir = Path(spec.origin).parent / "models"
+            break
+    else:
+        logger.warning("OCR server: paquete rapidocr no encontrado")
+        return None
+
+    models_dir.mkdir(exist_ok=True)
+
+    _BASE = (
+        "https://www.modelscope.cn/models/RapidAI/RapidOCR"
+        "/resolve/master/onnx/PP-OCRv4"
+    )
+    _MODELS = [
+        ("ch_PP-OCRv4_det_server.onnx", f"{_BASE}/det/ch_PP-OCRv4_det_server.onnx", "~47 MB"),
+        ("ch_PP-OCRv4_rec_server.onnx", f"{_BASE}/rec/ch_PP-OCRv4_rec_server.onnx", "~90 MB"),
+    ]
+
+    result_paths: list[Path] = []
+    for filename, url, size_hint in _MODELS:
+        dest = models_dir / filename
+        if dest.exists():
+            logger.info("OCR server: %s ya en caché (%s)", filename, dest)
+            result_paths.append(dest)
+            continue
+
+        logger.info("OCR server: descargando %s (%s) desde ModelScope...", filename, size_hint)
+        try:
+            urllib.request.urlretrieve(url, dest)
+            size_mb = dest.stat().st_size / 1_000_000
+            logger.info("OCR server: %s descargado (%.1f MB)", filename, size_mb)
+            result_paths.append(dest)
+        except Exception as exc:
+            logger.warning("OCR server: descarga de %s fallida: %s — usando mobile", filename, exc)
+            dest.unlink(missing_ok=True)
+            return None
+
+    return result_paths[0], result_paths[1]
+
+
 def _load_ocr() -> "RapidOCR":
+    from app.core import runtime_settings
     from rapidocr_onnxruntime import RapidOCR
-    logger.info("OCR: cargando RapidOCR (modelos PaddleOCR)...")
-    instance = RapidOCR()
+    quality = runtime_settings.get("ocrQuality", "mobile")
+    logger.info("OCR: cargando RapidOCR (calidad=%s)...", quality)
+    if quality == "server":
+        paths = _ensure_server_models()
+        if paths is not None:
+            det_path, rec_path = paths
+            try:
+                instance = RapidOCR(
+                    det_model_path=str(det_path),
+                    rec_model_path=str(rec_path),
+                )
+                logger.info("OCR: modelos server cargados (PP-OCRv4 server, ~140 MB)")
+            except Exception as exc:
+                logger.warning("OCR server no disponible (%s) — usando mobile como fallback", exc)
+                instance = RapidOCR()
+        else:
+            logger.warning("OCR server: descarga fallida — usando mobile como fallback")
+            instance = RapidOCR()
+    else:
+        instance = RapidOCR()
     logger.info("OCR: listo")
     return instance
 
 
-def _load_caption_client() -> AsyncClient:
-    return AsyncClient(host=_OLLAMA_URL, timeout=120.0)
+def _load_caption_client() -> Client:
+    # Timeout de 30 s: suficiente para modelos de vision ligeros (moondream),
+    # pero no tan alto como para bloquear la ingesta si Ollama no responde.
+    # Cliente SINCRONO a proposito: caption_image se invoca desde threads worker
+    # (asyncio.to_thread). Un AsyncClient se ata al event loop de su primer uso; al
+    # llamarlo con asyncio.run() en cada imagen se creaba un loop nuevo y el cliente
+    # cacheado quedaba atado a uno ya cerrado -> "Event loop is closed". httpx.Client
+    # (que envuelve Client) es thread-safe, asi que un cliente compartido vale.
+    return Client(host=_OLLAMA_URL, timeout=30.0)
 
 
 _ocr = LazyService("OCR", _load_ocr)
 _caption = LazyService("Captioning", _load_caption_client)
+_caption_failures = 0   # fallos consecutivos; ≥3 desactiva captioning
 
 # Registrar modelos lazy para que get_model_status() los incluya
 from app.services.rag._lazy import register as _register  # noqa: E402
@@ -58,28 +136,41 @@ _register(_caption)
 
 
 def ocr_image(path: Path) -> str:
-    """Extrae texto de una imagen via OCR. Devuelve "" si no hay texto detectado."""
+    """Extrae texto de una imagen via OCR. Devuelve "" si no hay texto detectado.
+
+    Carga la imagen via Pillow en lugar de pasar la ruta directamente: evita que
+    cv2.imread() falle silenciosamente con WEBP u otros formatos no soportados
+    por la build de OpenCV del entorno.
+    """
     engine = _ocr.get()
     if engine is None:
         return ""
     try:
-        result, _ = engine(str(path))
+        import numpy as np
+        from PIL import Image
+        img = np.array(Image.open(path).convert("RGB"))
+        result, _ = engine(img)
         if not result:
             return ""
-        # result = [(bbox, text, score), ...]
         return " ".join(item[1] for item in result if item and len(item) >= 2 and item[1])
     except Exception as exc:  # noqa: BLE001
         logger.warning("OCR fallo en %s: %s", path.name, exc)
         return ""
 
 
-async def caption_image_async(path: Path) -> str:
-    """Genera descripcion en lenguaje natural via Moondream/Ollama."""
+def caption_image(path: Path) -> str:
+    """Genera descripcion en lenguaje natural via Moondream/Ollama.
+
+    Sincrono: se invoca desde extractores que corren en threads worker. Usa el
+    Client sincrono de ollama para evitar el "Event loop is closed" que daba el
+    AsyncClient cacheado entre loops creados por asyncio.run().
+    """
+    global _caption_failures
     client = _caption.get()
     if client is None:
         return ""
     try:
-        resp = await client.chat(
+        resp = client.chat(
             model=_MOONDREAM_MODEL,
             messages=[{
                 "role": "user",
@@ -88,30 +179,40 @@ async def caption_image_async(path: Path) -> str:
             }],
             options={"temperature": 0.2, "num_ctx": 2048},
         )
+        _caption_failures = 0
         return (resp.message.content or "").strip()
     except Exception as exc:  # noqa: BLE001
-        # Si Ollama no tiene Moondream descargado, deshabilitar para esta sesion
         msg = str(exc).lower()
+        _caption_failures += 1
+
         model_missing = ("not found" in msg) or ("model" in msg and "pull" in msg)
+        ollama_unavailable = (
+            "connect" in msg
+            or "refused" in msg
+            or "unreachable" in msg
+            or "timeout" in msg
+            or "timed out" in msg
+            or "failed to connect" in msg
+        )
+
         if model_missing:
             logger.warning(
-                "Moondream no esta descargado en Ollama: 'ollama pull %s'", _MOONDREAM_MODEL
+                "Modelo '%s' no descargado en Ollama ('ollama pull %s'). "
+                "Captioning desactivado para esta sesion.",
+                _MOONDREAM_MODEL, _MOONDREAM_MODEL,
             )
             _caption.disable()
+            _caption_failures = 0
+        elif ollama_unavailable or _caption_failures >= 3:
+            logger.warning(
+                "Ollama no disponible para captioning (ocupado, sin conexion o timeout). "
+                "Captioning desactivado para esta sesion de indexado."
+            )
+            _caption.disable()
+            _caption_failures = 0
         else:
             logger.warning("Captioning fallo en %s: %s", path.name, exc)
         return ""
-
-
-def caption_image(path: Path) -> str:
-    """Wrapper sincrono para uso desde extractores sincronos."""
-    try:
-        return asyncio.run(caption_image_async(path))
-    except RuntimeError:
-        # Ya hay un event loop corriendo — usar otro thread
-        import concurrent.futures
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
-            return ex.submit(asyncio.run, caption_image_async(path)).result()
 
 
 def extract_image_text(path: Path) -> str:

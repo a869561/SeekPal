@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 
 WhisperModel = Literal["tiny", "base", "small", "medium", "large"]
+OcrQuality   = Literal["mobile", "server"]
 
 
 def _now_utc() -> datetime:
@@ -34,6 +35,7 @@ class UserSettings(BaseModel):
     indexMultimedia: bool = True       # master switch para audio/imagen/video
     videoFrameInterval: int = Field(default=30, ge=1, le=600)
     videoMaxFrames: int = Field(default=20, ge=1, le=500)
+    ocrQuality: OcrQuality = "mobile"  # mobile=rápido (~15 MB) | server=preciso (~140 MB)
 
 
 class Config(Document):

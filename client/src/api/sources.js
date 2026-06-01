@@ -7,3 +7,4 @@ export const toggleAutoIndex  = (id)   => api.patch(`/sources/${id}/auto-index`)
 export const pauseIngest      = (id)   => api.post(`/sources/${id}/ingest/pause`);
 export const resumeIngest     = (id)   => api.post(`/sources/${id}/ingest/resume`);
 export const cancelIngest     = (id)   => api.post(`/sources/${id}/ingest/cancel`);
+export const getIngestProgress = (id)  => api.get(`/sources/${id}/ingest/progress`);

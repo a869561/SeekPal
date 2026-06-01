@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { getSources, pauseIngest, resumeIngest, cancelIngest } from "../../api/sources.js";
+import { getSources, pauseIngest, resumeIngest, cancelIngest, getIngestProgress } from "../../api/sources.js";
 import { Search, Brain, Pause, Play, X } from "lucide-react";
 
 function formatDuration(seconds) {
@@ -13,14 +13,21 @@ function formatDuration(seconds) {
 export default function IngestionProgress({ sourceId, onDone }) {
   const { t } = useTranslation();
 
-  // "connecting" | "scanning" | "processing" | "extracting" | "embedding" | "indexing" | "paused" | "done"
+  // "connecting" | "reconnecting" | "scanning" | "extracting" | "embedding"
+  // | "indexing" | "paused" | "done"
   const [phase, setPhase] = useState("connecting");
+
   const [scanProgress,    setScanProgress]    = useState({ current: 0, total: 0, file: "" });
   const [extractProgress, setExtractProgress] = useState({ current: 0, total: 0, file: "" });
   const [indexProgress,   setIndexProgress]   = useState({ current: 0, total: 0, file: "" });
   const [embedProgress,   setEmbedProgress]   = useState({ current: 0, total: 0 });
-  const [error,    setError]    = useState(null);
-  const [paused,   setPaused]   = useState(false);
+
+  // Marca de agua: ficheros "procesados" que nunca retrocede aunque cambien
+  // las fases. Se calcula como max(extractProgress, indexProgress).
+  const [filesWatermark, setFilesWatermark] = useState(0);
+
+  const [error,      setError]      = useState(null);
+  const [paused,     setPaused]     = useState(false);
   const [elapsedSec, setElapsedSec] = useState(0);
 
   const doneRef        = useRef(false);
@@ -28,9 +35,6 @@ export default function IngestionProgress({ sourceId, onDone }) {
   const startTimeRef   = useRef(Date.now());
   const tickRef        = useRef(null);
   const activePhaseRef = useRef("scanning");
-  // True mientras el componente esta montado. Evita que onloadend arranque
-  // polling huerfano tras un xhr.abort() del cleanup (el polling quedaria
-  // corriendo cada 3s hasta agotar los 400 intentos = ~20 min).
   const mountedRef     = useRef(true);
 
   useEffect(() => {
@@ -48,20 +52,55 @@ export default function IngestionProgress({ sourceId, onDone }) {
     setPhase("done");
   }
 
-  function startPolling() {
-    let attempts = 0;
-    pollRef.current = setInterval(async () => {
-      if (++attempts > 400) { clearInterval(pollRef.current); return; }
-      try {
-        const r = await getSources();
-        const s = (r.data.data || []).find((x) => x._id === sourceId);
-        if (!s || s.status !== "scanning") {
-          clearInterval(pollRef.current);
-          if (s?.status === "done") { markDone(); onDone(s); }
-          else if (s?.status === "error") setError(t("ingest.error", { message: "Ingestion failed" }));
+  // Vuelca un snapshot de progreso del servidor sobre el estado del componente.
+  // Permite que un cliente que reconecta (recibio 409) reconstruya las barras
+  // reales en vez de quedarse en la barra indeterminada de "reconnecting".
+  function applySnapshot(snap) {
+    if (!snap) return;
+    if (snap.scan)    setScanProgress({ current: snap.scan.current, total: snap.scan.total, file: snap.scan.file });
+    if (snap.extract) setExtractProgress({ current: snap.extract.current, total: snap.extract.total, file: snap.extract.file });
+    if (snap.index)   setIndexProgress({ current: snap.index.current, total: snap.index.total, file: snap.index.file });
+    if (snap.embed)   setEmbedProgress({ current: snap.embed.current, total: snap.embed.total });
+    const wm = Math.max(snap.extract?.current || 0, snap.index?.current || 0);
+    setFilesWatermark((w) => Math.max(w, wm));
+    setPaused(!!snap.paused);
+    if (["scanning", "extracting", "embedding", "indexing"].includes(snap.phase)) {
+      activePhaseRef.current = snap.phase;
+      setPhase(snap.paused ? "paused" : snap.phase);
+    }
+  }
+
+  async function pollOnce() {
+    try {
+      const r = await getIngestProgress(sourceId);
+      const snap = r.data.data;
+
+      if (!snap || snap.active === false) {
+        clearInterval(pollRef.current);
+        if (snap && snap.phase === "error") {
+          setError(snap.error || t("ingest.error", { message: "Ingestion failed" }));
+          return;
         }
-      } catch { /* ignore transient errors */ }
-    }, 3000);
+        // done / cancelled / snapshot ausente → cerrar y refrescar la fuente
+        markDone();
+        try {
+          const rs = await getSources();
+          const updated = (rs.data.data || []).find((s) => s._id === sourceId);
+          if (updated) onDone(updated);
+        } catch { /* ignore */ }
+        return;
+      }
+
+      // Ingesta viva: aplicar el progreso real (sale del modo indeterminado)
+      applySnapshot(snap);
+    } catch { /* ignore transient errors */ }
+  }
+
+  function startPolling() {
+    // Sondeo inmediato para recuperar el progreso real cuanto antes (sin
+    // esperar al primer tick de 2s, que dejaba la barra indeterminada visible).
+    pollOnce();
+    pollRef.current = setInterval(pollOnce, 2000);
   }
 
   useEffect(() => {
@@ -73,9 +112,6 @@ export default function IngestionProgress({ sourceId, onDone }) {
     xhr.setRequestHeader("Authorization", `Bearer ${token}`);
     xhr.setRequestHeader("Accept", "text/event-stream");
 
-    // Solo trackear el offset, no copiar el responseText acumulado en una
-    // variable: en ingestas largas (10k+ ficheros, MB de eventos) duplicar
-    // el string en cada onprogress hace crecer la memoria del navegador.
     let processedLen = 0;
     let partialLine = "";
 
@@ -85,24 +121,23 @@ export default function IngestionProgress({ sourceId, onDone }) {
 
       const chunk = partialLine + newData;
       const lines = chunk.split("\n");
-      // La ultima entrada puede ser una linea incompleta — la guardamos
-      // para concatenar con el siguiente fragmento.
       partialLine = lines.pop() ?? "";
 
       for (const line of lines) {
         if (!line.startsWith("data: ")) continue;
         try {
           const ev = JSON.parse(line.slice(6));
+
           if (ev.type === "scanning") {
             setPhase("scanning"); activePhaseRef.current = "scanning";
 
           } else if (ev.type === "progress") {
-            setPhase("processing"); activePhaseRef.current = "processing";
             setScanProgress({ current: ev.current, total: ev.total, file: ev.file });
 
           } else if (ev.type === "extracting_progress") {
             setPhase("extracting"); activePhaseRef.current = "extracting";
             setExtractProgress({ current: ev.current, total: ev.total, file: ev.file });
+            setFilesWatermark((w) => Math.max(w, ev.current));
 
           } else if (ev.type === "embedding_start") {
             setPhase("embedding"); activePhaseRef.current = "embedding";
@@ -115,6 +150,7 @@ export default function IngestionProgress({ sourceId, onDone }) {
           } else if (ev.type === "indexing_progress") {
             setPhase("indexing"); activePhaseRef.current = "indexing";
             setIndexProgress({ current: ev.current, total: ev.total, file: ev.file });
+            setFilesWatermark((w) => Math.max(w, ev.current));
 
           } else if (ev.type === "paused") {
             setPaused(true); setPhase("paused");
@@ -140,12 +176,20 @@ export default function IngestionProgress({ sourceId, onDone }) {
     };
 
     xhr.onloadend = () => {
-      // Si el componente ya se desmonto, no levantar polling: el cleanup del
-      // useEffect dispara xhr.abort() que llega aqui despues de limpiar.
       if (!mountedRef.current) return;
       if (!doneRef.current) {
-        const aiPhases = ["extracting", "embedding", "indexing"];
-        setPhase((prev) => (aiPhases.includes(prev) || prev === "processing" ? activePhaseRef.current : prev));
+        // 409 = ingesta ya en progreso en el backend (usuario volvió a la página).
+        // En lugar de reiniciar, entrar en modo polling mostrando "en progreso".
+        if (xhr.status === 409) {
+          setPhase("reconnecting");
+        } else {
+          const aiPhases = ["extracting", "embedding", "indexing"];
+          setPhase((prev) =>
+            aiPhases.includes(prev) || prev === "processing"
+              ? activePhaseRef.current
+              : prev
+          );
+        }
         startPolling();
       }
     };
@@ -183,52 +227,59 @@ export default function IngestionProgress({ sourceId, onDone }) {
     );
   }
 
-  const isDone       = phase === "done";
-  const isConnecting = phase === "connecting";
-  const isScanning   = phase === "scanning";
-  const isAI = ["extracting", "embedding", "indexing", "paused"].includes(phase);
-  const isActive = !isDone && !isConnecting;
+  // ── Cálculos de progreso ────────────────────────────────────────────────
 
+  const isDone         = phase === "done";
+  const isConnecting   = phase === "connecting";
+  const isReconnecting = phase === "reconnecting";
+  const isScanning     = phase === "scanning";
+  const isActive       = !isDone && !isConnecting;
+
+  // Barra 1: escaneo de ficheros
   const scanPct = scanProgress.total > 0
     ? Math.round((scanProgress.current / scanProgress.total) * 100) : 0;
 
-  // Progreso de la barra de IA según sub-fase
-  const embedPct = embedProgress.total > 0
-    ? Math.round((embedProgress.current / embedProgress.total) * 100) : 0;
+  // Barra 2: proceso IA — usamos la marca de agua (nunca retrocede)
+  const aiTotal   = extractProgress.total || indexProgress.total || 0;
+  // Progreso real = ficheros completados (indexados). Si no hay datos de index
+  // aún, usar la marca de agua (ficheros extraídos) como aproximación.
+  const aiDone    = indexProgress.current > 0 ? indexProgress.current : filesWatermark;
+  const aiPct     = isDone ? 100
+                  : aiTotal > 0 ? Math.round((aiDone / aiTotal) * 100)
+                  : 0;
 
-  const aiTotal   = phase === "extracting" ? extractProgress.total
-                  : phase === "embedding"  ? embedProgress.total
-                  : indexProgress.total || extractProgress.total;
-  const aiCurrent = phase === "extracting" ? extractProgress.current
-                  : phase === "embedding"  ? embedProgress.current
-                  : indexProgress.current;
-  const aiFile    = phase === "extracting" ? extractProgress.file : indexProgress.file;
-  const aiPct     = phase === "embedding"  ? embedPct
-                  : aiTotal > 0 ? Math.round((aiCurrent / aiTotal) * 100) : 0;
+  const showAIBar = !isConnecting && !isReconnecting && !isScanning || isDone;
 
-  const showAIBar  = isAI || isDone;
-  // Barra animada solo si aún no hay datos de progreso
-  const aiAnimated = !isDone && !paused && (
-    (phase === "embedding"  && embedProgress.total === 0) ||
-    (phase !== "embedding"  && aiTotal === 0)
-  );
+  // Nombre de fichero activo para el sub-texto. Durante embedding usamos el último
+  // fichero extraído (extractProgress.file no se borra al cambiar de fase).
+  const currentFile = phase === "indexing" ? indexProgress.file : extractProgress.file;
 
-  const aiLabel =
-    paused                 ? t("ingest.phase.paused")     :
-    phase === "extracting" ? t("ingest.phase.extracting") :
-    phase === "embedding"  ? t("ingest.phase.embedding")  :
-    t("ingest.phase.index");
+  const phaseLabel = (() => {
+    if (paused)                return t("ingest.phase.paused");
+    if (phase === "embedding") return t("ingest.phase.embedding");
+    if (phase === "indexing")  return t("ingest.phase.index");
+    return t("ingest.phase.extracting");
+  })();
+
+  const chunkDetail = phase === "embedding" && embedProgress.total > 0
+    ? ` · ${embedProgress.current}/${embedProgress.total} chunks`
+    : "";
+
+  const aiSubtext = isDone || paused || isReconnecting || !currentFile
+    ? null
+    : `${currentFile} — ${phaseLabel}${chunkDetail}`;
 
   return (
     <div className="mt-4 space-y-3">
-      {/* Barra 1 — Escaneo de ficheros */}
+
+      {/* ── Barra 1: Escaneo de ficheros ─────────────────────────────── */}
       <div className="space-y-1.5">
         <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
           <span className="flex items-center gap-1.5">
             <Search size={11} className={(isConnecting || isScanning) ? "animate-pulse" : ""} />
             {t("ingest.phase.scan")}
           </span>
-          {!isConnecting && !isScanning && (
+          {!isConnecting && !isReconnecting && (!isScanning || scanProgress.total > 0) && (
             <span className="font-medium tabular-nums ml-2 flex-shrink-0">
               {isDone
                 ? t("ingest.fileCount", { count: scanProgress.total })
@@ -237,58 +288,57 @@ export default function IngestionProgress({ sourceId, onDone }) {
           )}
         </div>
         <div className="h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-          {isConnecting || isScanning ? (
+          {isConnecting || (isScanning && scanProgress.total === 0) ? (
             <div className="h-full w-1/3 rounded-full bg-indigo-400 animate-[scanning_1.2s_ease-in-out_infinite]" />
           ) : (
-            <div className="h-full rounded-full transition-all duration-300 bg-indigo-500"
-                 style={{ width: `${showAIBar || isDone ? 100 : scanPct}%` }} />
+            <div
+              className="h-full rounded-full transition-all duration-300 bg-indigo-500"
+              style={{ width: `${!isScanning || isDone || isReconnecting ? 100 : scanPct}%` }}
+            />
           )}
         </div>
       </div>
 
-      {/* Barra 2 — IA (extracción → vectorización → indexado) */}
-      {showAIBar && (
+      {/* ── Barra 2: Proceso IA ──────────────────────────────────────── */}
+      {(showAIBar || isReconnecting) && (
         <div className="space-y-1.5">
-          <div className="flex items-center justify-between text-xs text-violet-600 dark:text-violet-400">
+          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span className="flex items-center gap-1.5">
-              <Brain size={11} className={isDone || paused ? "" : "animate-pulse"} />
-              {aiLabel}
+              <Brain size={11} />
+              {isReconnecting ? t("ingest.reconnecting", "En progreso...") : t("ingest.phase.aiProcessing")}
             </span>
-            {/* Contador: se muestra cuando hay datos deterministas */}
-            {!aiAnimated && aiTotal > 0 && (
+
+            {!isReconnecting && aiTotal > 0 && (
               <span className="font-medium tabular-nums ml-2 flex-shrink-0">
                 {isDone
-                  ? t("ingest.fileCount", { count: indexProgress.total || extractProgress.total })
-                  : phase === "embedding"
-                    ? t("ingest.embedProgress", { current: aiCurrent, total: aiTotal, pct: aiPct })
-                    : t("ingest.progress", { current: aiCurrent, total: aiTotal, pct: aiPct })}
+                  ? t("ingest.fileCount", { count: aiTotal })
+                  : `${t("ingest.file", "Fichero")} ${aiDone} / ${aiTotal}`}
               </span>
             )}
           </div>
 
           <div className="h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-            {aiAnimated ? (
-              <div className="h-full w-full rounded-full bg-violet-400 animate-[scanning_1.2s_ease-in-out_infinite]" />
+            {isReconnecting ? (
+              <div className="h-full w-1/2 rounded-full bg-indigo-400 animate-[scanning_1.2s_ease-in-out_infinite]" />
             ) : (
               <div
-                className={`h-full rounded-full transition-all duration-300 ${
-                  isDone ? "bg-emerald-500" : paused ? "bg-amber-500" : "bg-violet-500"
+                className={`h-full rounded-full transition-all duration-500 ${
+                  isDone ? "bg-emerald-500" : paused ? "bg-amber-500" : "bg-indigo-500"
                 }`}
                 style={{ width: `${isDone ? 100 : aiPct}%` }}
               />
             )}
           </div>
 
-          {/* Nombre del fichero en proceso */}
-          {!isDone && !paused && aiFile && (
-            <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate" title={aiFile}>
-              {aiFile}
+          {aiSubtext && (
+            <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate" title={aiSubtext}>
+              ↳ {aiSubtext}
             </p>
           )}
         </div>
       )}
 
-      {/* Controles + tiempo */}
+      {/* ── Controles + cronómetro ────────────────────────────────────── */}
       <div className="flex items-center justify-between">
         <p className={`text-xs font-medium ${isDone ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400 dark:text-slate-500"}`}>
           {isDone ? `${t("ingest.done")} — ${formatDuration(elapsedSec)}` : formatDuration(elapsedSec)}
