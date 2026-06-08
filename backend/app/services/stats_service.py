@@ -21,11 +21,19 @@ async def get_summary() -> dict:
 
     active_sources = await Source.find(Source.status == "done").count()
 
+    last_indexed_pipeline = [
+        {"$group": {"_id": None, "last": {"$max": "$metadata.rag.lastIndexedAt"}}}
+    ]
+    last_indexed_cur = await files_col.aggregate(last_indexed_pipeline).to_list(length=1)
+    last_indexed_raw = last_indexed_cur[0]["last"] if last_indexed_cur else None
+    last_indexed = last_indexed_raw.isoformat() if last_indexed_raw is not None else None
+
     return {
         "totalFiles": total_files,
         "totalSize": total_size,
         "activeSources": active_sources,
         "byCategory": by_category,
+        "lastIndexed": last_indexed,
     }
 
 

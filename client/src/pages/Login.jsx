@@ -52,7 +52,7 @@ export default function Login() {
                     required
                     autoFocus
                     className={`w-full px-4 py-3 pr-11 rounded-xl bg-slate-900/70 border text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:border-transparent transition
-                      ${error ? "border-red-500 focus:ring-red-500" : "border-slate-600/50 focus:ring-indigo-500"}`}
+                      ${error ? "border-danger focus:ring-danger/50" : "border-slate-600/50 focus:ring-brand/50"}`}
                   />
                   <button
                     type="button"
@@ -62,12 +62,12 @@ export default function Login() {
                     {visible ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
-                {error && <p className="text-red-400 text-xs mt-2">{error}</p>}
+                {error && <p className="text-danger text-xs mt-2">{error}</p>}
               </div>
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold transition shadow-lg shadow-indigo-500/20"
+                className="w-full py-3 px-4 rounded-xl bg-brand hover:brightness-110 active:scale-[0.98] disabled:opacity-50 text-white font-semibold transition shadow-lg shadow-brand/20"
               >
                 {loading ? t("login.submitting") : t("login.submit")}
               </button>

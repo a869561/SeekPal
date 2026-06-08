@@ -13,7 +13,7 @@ function renderWithCitations(text, citations) {
     if (m && map[m[1]] != null) {
       return (
         <sup key={i}>
-          <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-400 text-[9px] font-bold cursor-default mx-0.5">
+          <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-brand-soft text-brand text-[9px] font-bold cursor-default mx-0.5">
             {map[m[1]]}
           </span>
         </sup>
@@ -43,13 +43,13 @@ export default function ChatResponse({ citations, text, loading }) {
 
       <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
         <div className="flex items-center gap-2 mb-3">
-          <div className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950">
-            <Bot size={16} className="text-indigo-500" />
+          <div className="p-1.5 rounded-lg bg-brand-soft">
+            <Bot size={16} className="text-brand" />
           </div>
           <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
             {t("ask.aiAnswer")}
           </span>
-          {loading && <Loader2 size={14} className="text-indigo-400 animate-spin ml-1" />}
+          {loading && <Loader2 size={14} className="text-brand animate-spin ml-1" />}
         </div>
         <div className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap min-h-[2rem]">
           {text

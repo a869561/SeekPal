@@ -15,6 +15,7 @@ from app.services.rag.extractors.pdf import PdfExtractor
 from app.services.rag.extractors.ppt import PptExtractor
 from app.services.rag.extractors.pptx import PptxExtractor
 from app.services.rag.extractors.rtf import RtfExtractor
+from app.services.rag.extractors.svg import SvgExtractor
 from app.services.rag.extractors.text import TextExtractor, is_text_file
 from app.services.rag.extractors.video import VideoExtractor
 from app.services.rag.extractors.xlsx import XlsxExtractor
@@ -39,6 +40,7 @@ _EXTRACTORS: list[BaseExtractor] = [
     XlsxExtractor(),
     RtfExtractor(),
     EpubExtractor(),
+    SvgExtractor(),
     AudioExtractor(),
     ImageExtractor(),
     VideoExtractor(),

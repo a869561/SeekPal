@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Trash2, PlayCircle, Clock, CheckCircle, AlertCircle, Loader, RefreshCw, Brain } from "lucide-react";
 import IngestionProgress from "./IngestionProgress.jsx";
+import Button from "../ui/Button.jsx";
 import { toggleAutoIndex } from "../../api/sources.js";
 
 function formatSize(bytes) {
@@ -27,11 +28,11 @@ export default function SourcesList({ sources, onDelete, onUpdate }) {
   const [togglingId, setTogglingId] = useState(null);
 
   const STATUS_CONFIG = {
-    idle:     { icon: Clock,        color: "text-slate-400",   bg: "bg-slate-100 dark:bg-slate-700",      label: t("sources.status.idle") },
-    scanning: { icon: Loader,       color: "text-indigo-500",  bg: "bg-indigo-50 dark:bg-indigo-950",     label: t("sources.status.scanning") },
-    indexing: { icon: Brain,        color: "text-violet-500",  bg: "bg-violet-50 dark:bg-violet-950",     label: t("sources.status.indexing") },
-    done:     { icon: CheckCircle,  color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-950",   label: t("sources.status.done") },
-    error:    { icon: AlertCircle,  color: "text-red-500",     bg: "bg-red-50 dark:bg-red-950",           label: t("sources.status.error") },
+    idle:     { icon: Clock,        color: "text-slate-400",            bg: "bg-slate-100 dark:bg-slate-700", label: t("sources.status.idle") },
+    scanning: { icon: Loader,       color: "text-brand",                bg: "bg-brand-soft",                  label: t("sources.status.scanning") },
+    indexing: { icon: Brain,        color: "text-brand",                bg: "bg-brand-soft",                  label: t("sources.status.indexing") },
+    done:     { icon: CheckCircle,  color: "text-success",              bg: "bg-success-soft",                label: t("sources.status.done") },
+    error:    { icon: AlertCircle,  color: "text-danger",               bg: "bg-danger-soft",                 label: t("sources.status.error") },
   };
 
   async function handleToggleAutoIndex(source) {
@@ -54,7 +55,7 @@ export default function SourcesList({ sources, onDelete, onUpdate }) {
 
   return (
     <div className="space-y-3">
-      {sources.map((source) => {
+      {sources.map((source, idx) => {
         // When scanning with files already present → embedding phase (not initial scan)
         const effectiveStatus =
           source.status === "scanning" && (source.fileCount ?? 0) > 0 ? "indexing" : source.status;
@@ -63,7 +64,7 @@ export default function SourcesList({ sources, onDelete, onUpdate }) {
         const isIngesting = ingesting === source._id;
 
         return (
-          <div key={source._id} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm">
+          <div key={source._id} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-card reveal-up" style={{ "--stagger": idx }}>
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 mb-1">
@@ -80,14 +81,14 @@ export default function SourcesList({ sources, onDelete, onUpdate }) {
                 </div>
                 {source.status === "done" && source.lastIngested && (
                   <div className="flex items-center gap-3 mt-1.5 text-xs">
-                    <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                    <span className="text-success font-medium">
                       {t("sources.indexed", { count: source.indexedCount ?? 0 })}
                     </span>
                     <span className="text-slate-400 dark:text-slate-500">
                       {t("sources.empty", { count: source.skippedCount ?? 0 })}
                     </span>
                     <span className={(source.failedCount ?? 0) > 0
-                      ? "text-red-500 dark:text-red-400 font-medium"
+                      ? "text-danger font-medium"
                       : "text-slate-400 dark:text-slate-500"}>
                       {t("sources.notIndexed", { count: source.failedCount ?? 0 })}
                     </span>
@@ -96,35 +97,34 @@ export default function SourcesList({ sources, onDelete, onUpdate }) {
               </div>
 
               <div className="flex items-center gap-2 flex-shrink-0">
-                <button
+                <Button
+                  variant={source.autoIndex ? "brand" : "neutral"}
                   onClick={() => handleToggleAutoIndex(source)}
                   disabled={togglingId === source._id}
                   title={source.autoIndex ? t("sources.autoIndexOn") : t("sources.autoIndexOff")}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition disabled:opacity-40 ${
-                    source.autoIndex
-                      ? "bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900"
-                      : "bg-slate-100 dark:bg-slate-700 text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600"
-                  }`}
                 >
                   <RefreshCw size={14} className={togglingId === source._id ? "animate-spin" : ""} />
                   {t("sources.auto")}
-                </button>
+                </Button>
 
-                <button
+                <Button
+                  variant="brand"
                   onClick={() => setIngesting(source._id)}
                   disabled={isIngesting || source.status === "scanning"}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900 disabled:opacity-40 transition"
                 >
                   <PlayCircle size={14} />
                   {t("sources.ingest")}
-                </button>
-                <button
+                </Button>
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="!p-1.5 hover:text-danger"
                   onClick={() => onDelete(source._id)}
-                  className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950 rounded-lg transition"
                   title={t("sources.deleteTooltip")}
                 >
                   <Trash2 size={16} />
-                </button>
+                </Button>
               </div>
             </div>
 

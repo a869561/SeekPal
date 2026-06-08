@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getSources, pauseIngest, resumeIngest, cancelIngest, getIngestProgress } from "../../api/sources.js";
 import { Search, Brain, Pause, Play, X } from "lucide-react";
+import Button from "../ui/Button.jsx";
+import ProgressBar from "../ui/ProgressBar.jsx";
 
 function formatDuration(seconds) {
   if (seconds < 60) return `${seconds}s`;
@@ -221,7 +223,7 @@ export default function IngestionProgress({ sourceId, onDone }) {
 
   if (error) {
     return (
-      <div className="mt-3 p-3 rounded-xl bg-red-50 dark:bg-red-950 border border-red-100 dark:border-red-900 text-xs text-red-600 dark:text-red-400">
+      <div className="mt-3 p-3 rounded-xl bg-danger-soft border border-danger/20 text-xs text-danger">
         {t("ingest.error", { message: error })}
       </div>
     );
@@ -287,16 +289,12 @@ export default function IngestionProgress({ sourceId, onDone }) {
             </span>
           )}
         </div>
-        <div className="h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-          {isConnecting || (isScanning && scanProgress.total === 0) ? (
-            <div className="h-full w-1/3 rounded-full bg-indigo-400 animate-[scanning_1.2s_ease-in-out_infinite]" />
-          ) : (
-            <div
-              className="h-full rounded-full transition-all duration-300 bg-indigo-500"
-              style={{ width: `${!isScanning || isDone || isReconnecting ? 100 : scanPct}%` }}
-            />
-          )}
-        </div>
+        <ProgressBar
+          indeterminate={isConnecting || (isScanning && scanProgress.total === 0)}
+          value={!isScanning || isDone || isReconnecting ? 100 : scanPct}
+          active={isScanning}
+          tone="brand"
+        />
       </div>
 
       {/* ── Barra 2: Proceso IA ──────────────────────────────────────── */}
@@ -317,18 +315,12 @@ export default function IngestionProgress({ sourceId, onDone }) {
             )}
           </div>
 
-          <div className="h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-            {isReconnecting ? (
-              <div className="h-full w-1/2 rounded-full bg-indigo-400 animate-[scanning_1.2s_ease-in-out_infinite]" />
-            ) : (
-              <div
-                className={`h-full rounded-full transition-all duration-500 ${
-                  isDone ? "bg-emerald-500" : paused ? "bg-amber-500" : "bg-indigo-500"
-                }`}
-                style={{ width: `${isDone ? 100 : aiPct}%` }}
-              />
-            )}
-          </div>
+          <ProgressBar
+            indeterminate={isReconnecting}
+            value={isDone ? 100 : aiPct}
+            active={!isDone && !paused}
+            tone={isDone ? "success" : "brand"}
+          />
 
           {aiSubtext && (
             <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate" title={aiSubtext}>
@@ -340,27 +332,24 @@ export default function IngestionProgress({ sourceId, onDone }) {
 
       {/* ── Controles + cronómetro ────────────────────────────────────── */}
       <div className="flex items-center justify-between">
-        <p className={`text-xs font-medium ${isDone ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400 dark:text-slate-500"}`}>
+        <p className={`text-xs font-medium ${isDone ? "text-success" : "text-slate-400 dark:text-slate-500"}`}>
           {isDone ? `${t("ingest.done")} — ${formatDuration(elapsedSec)}` : formatDuration(elapsedSec)}
         </p>
 
         {isActive && (
           <div className="flex items-center gap-1.5">
             {paused ? (
-              <button onClick={handleResume}
-                className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950 hover:bg-emerald-100 dark:hover:bg-emerald-900 transition-colors">
+              <Button variant="brand" size="sm" onClick={handleResume}>
                 <Play size={10} />{t("ingest.resume", "Reanudar")}
-              </button>
+              </Button>
             ) : (
-              <button onClick={handlePause}
-                className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950 hover:bg-amber-100 dark:hover:bg-amber-900 transition-colors">
+              <Button variant="neutral" size="sm" onClick={handlePause}>
                 <Pause size={10} />{t("ingest.pause", "Pausar")}
-              </button>
+              </Button>
             )}
-            <button onClick={handleCancel}
-              className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950 hover:bg-red-100 dark:hover:bg-red-900 transition-colors">
+            <Button variant="danger" size="sm" onClick={handleCancel}>
               <X size={10} />{t("ingest.cancel", "Cancelar")}
-            </button>
+            </Button>
           </div>
         )}
       </div>

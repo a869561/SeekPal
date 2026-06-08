@@ -5,8 +5,8 @@ export default function CitationCard({ citation, index }) {
   const { t } = useTranslation();
   return (
     <div className="flex items-start gap-2.5 p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
-      <div className="flex-shrink-0 w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center mt-0.5">
-        <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400">{index + 1}</span>
+      <div className="flex-shrink-0 w-5 h-5 rounded-full bg-brand-soft flex items-center justify-center mt-0.5">
+        <span className="text-[10px] font-bold text-brand">{index + 1}</span>
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5 flex-wrap">

@@ -4,14 +4,14 @@ import {
 } from "recharts";
 import { useTheme } from "../../context/ThemeContext.jsx";
 
-const COLORS = {
-  text:     "#6366f1",
-  document: "#f59e0b",
-  image:    "#10b981",
-  audio:    "#ec4899",
-  video:    "#3b82f6",
-  other:    "#94a3b8",
-};
+// Color de categoría leído de los tokens CSS (--cat-*), la MISMA fuente que los
+// badges. `resolvedTheme` fuerza el re-render al cambiar de modo, así que se
+// re-lee el valor claro/oscuro correcto.
+function catColor(id) {
+  if (typeof window === "undefined") return "#6b7280";
+  const v = getComputedStyle(document.documentElement).getPropertyValue(`--cat-${id}`).trim();
+  return v || "#6b7280";
+}
 
 function formatSize(bytes) {
   if (!bytes) return "0 B";
@@ -35,18 +35,18 @@ export default function FileTypeChart({ data }) {
 
   if (!data?.length) {
     return (
-      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-8 text-center shadow-sm">
+      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-8 text-center shadow-card">
         <p className="text-slate-400 dark:text-slate-500 text-sm">{t("stats.noData")}</p>
       </div>
     );
   }
 
-  const pieData = data.map((d) => ({ name: catLabel(d._id), value: d.count, color: COLORS[d._id] || "#94a3b8" }));
-  const barData = data.map((d) => ({ name: catLabel(d._id), size: d.size, color: COLORS[d._id] || "#94a3b8" }));
+  const pieData = data.map((d) => ({ name: catLabel(d._id), value: d.count, color: catColor(d._id) }));
+  const barData = data.map((d) => ({ name: catLabel(d._id), size: d.size, color: catColor(d._id) }));
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
+      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-card">
         <h3 className="font-semibold text-slate-700 dark:text-slate-200 mb-4 text-sm">{t("stats.byCategory")}</h3>
         <ResponsiveContainer width="100%" height={220}>
           <PieChart>
@@ -59,7 +59,7 @@ export default function FileTypeChart({ data }) {
         </ResponsiveContainer>
       </div>
 
-      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
+      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-card">
         <h3 className="font-semibold text-slate-700 dark:text-slate-200 mb-4 text-sm">{t("stats.bySize")}</h3>
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={barData} margin={{ top: 4, right: 8, left: 8, bottom: 4 }}>

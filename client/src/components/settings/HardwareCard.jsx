@@ -4,6 +4,8 @@ import { Cpu, MemoryStick, Monitor, CheckCircle, AlertCircle, Loader2, RefreshCw
 import {
   getHardwareInfo, getInstallStatus, setProvider, restartApp, invalidateHardwareCache,
 } from "../../api/system.js";
+import Button from "../ui/Button.jsx";
+import StatusDot from "../ui/StatusDot.jsx";
 
 // Icono de tarjeta gráfica (lucide no tiene uno específico)
 const GpuIcon = ({ className }) => (
@@ -114,9 +116,9 @@ export default function HardwareCard() {
 
   if (loading) {
     return (
-      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
+      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-card">
         <div className="flex items-center gap-2">
-          <Loader2 size={18} className="text-indigo-500 animate-spin" />
+          <Loader2 size={18} className="text-brand animate-spin" />
           <h2 className="font-semibold text-slate-800 dark:text-slate-100">{t("hardware.title")}</h2>
         </div>
       </div>
@@ -139,21 +141,23 @@ export default function HardwareCard() {
   ];
 
   return (
-    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
+    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-card">
       {/* Cabecera con botón refrescar */}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-2">
-          <Zap size={18} className="text-indigo-500" />
+          <Zap size={18} className="text-brand" />
           <h2 className="font-semibold text-slate-800 dark:text-slate-100">{t("hardware.title")}</h2>
         </div>
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
+          className="!p-1.5 hover:text-brand"
           onClick={() => fetchHardware(true)}
           disabled={refreshing || busy}
           title={t("hardware.refresh")}
-          className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-950 transition disabled:opacity-40"
         >
           <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
-        </button>
+        </Button>
       </div>
 
       {/* Lista de componentes */}
@@ -194,27 +198,12 @@ export default function HardwareCard() {
         )}
       </div>
 
-      {/* Estado actual */}
-      <div className={`rounded-xl p-3 mb-4 flex items-center gap-3 ${
-        isGpuActive
-          ? "bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800"
-          : hasGpu
-            ? "bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800"
-            : "bg-slate-50 dark:bg-slate-700/30 border border-slate-200 dark:border-slate-600"
-      }`}>
-        {isGpuActive
-          ? <CheckCircle size={16} className="text-emerald-500 shrink-0" />
-          : hasGpu
-            ? <AlertCircle size={16} className="text-amber-500 shrink-0" />
-            : <Cpu size={16} className="text-slate-400 shrink-0" />
-        }
+      {/* Estado actual — marco neutro; el estado lo indica un punto, no un marco de color */}
+      <div className="rounded-xl p-3 mb-4 flex items-center gap-3 bg-slate-50 dark:bg-slate-700/30 border border-slate-200 dark:border-slate-600">
+        <StatusDot tone={isGpuActive ? "success" : hasGpu ? "warning" : "neutral"} />
         <div>
           <div className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">{t("hardware.aiProcessing")}</div>
-          <div className={`text-sm font-medium ${
-            isGpuActive ? "text-emerald-700 dark:text-emerald-400"
-            : hasGpu ? "text-amber-700 dark:text-amber-400"
-            : "text-slate-600 dark:text-slate-300"
-          }`}>
+          <div className="text-sm font-medium text-slate-700 dark:text-slate-200">
             {isGpuActive
               ? `${t("hardware.gpu")} ${hw.active_gpu_index != null ? hw.active_gpu_index + 1 : ""} — ${hw.active_label}`
               : hasGpu
@@ -234,7 +223,7 @@ export default function HardwareCard() {
           value={selectedPref}
           disabled={busy}
           onChange={(e) => setSelectedPref(e.target.value)}
-          className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-50"
+          className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand/50 disabled:opacity-50"
         >
           {selectorOptions.map((opt) => (
             <option key={opt.id} value={opt.id} disabled={!opt.available}>
@@ -249,60 +238,51 @@ export default function HardwareCard() {
 
       {/* Botón Aplicar */}
       {installState === "idle" && hasChanges && (
-        <button
-          onClick={handleApply}
-          className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-medium transition"
-        >
+        <Button variant="primary" size="lg" className="w-full" onClick={handleApply}>
           <Zap size={15} />
           {t("hardware.applyButton")}
-        </button>
+        </Button>
       )}
 
       {installState === "installing" && (
-        <div className="flex items-center gap-2 text-sm text-indigo-600 dark:text-indigo-400">
+        <div className="flex items-center gap-2 text-sm text-brand">
           <Loader2 size={15} className="animate-spin" />
           {pendingTarget === "auto" ? t("hardware.applying") : t("hardware.downloading")}
         </div>
       )}
 
       {installState === "restarting" && (
-        <div className="flex items-center gap-2 text-sm text-indigo-600 dark:text-indigo-400">
+        <div className="flex items-center gap-2 text-sm text-brand">
           <Loader2 size={15} className="animate-spin" />
           {t("hardware.applying")}
         </div>
       )}
 
       {installState === "done" && (
-        <div className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400">
+        <div className="flex items-center gap-2 text-sm text-success">
           <CheckCircle size={15} />
           {t("hardware.providerApplied")}
         </div>
       )}
 
       {installState === "error" && (
-        <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
+        <div className="flex items-center gap-2 text-sm text-danger">
           <AlertCircle size={15} />
           {t("hardware.error")}
         </div>
       )}
 
-      {/* Confirmación si hay indexación activa */}
+      {/* Confirmación si hay indexación activa (aviso real → naranja semántico) */}
       {showRestartConfirm && (
-        <div className="mt-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-700 rounded-xl p-4">
-          <p className="text-sm text-amber-800 dark:text-amber-300 mb-3">{t("hardware.indexingWarning")}</p>
+        <div className="mt-3 bg-warning-soft border border-warning/30 rounded-xl p-4">
+          <p className="text-sm text-warning mb-3">{t("hardware.indexingWarning")}</p>
           <div className="flex gap-2">
-            <button
-              onClick={() => handleRestart(true)}
-              className="flex-1 py-2 px-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium transition"
-            >
+            <Button variant="warning" size="lg" className="flex-1" onClick={() => handleRestart(true)}>
               {t("hardware.pauseAndApply")}
-            </button>
-            <button
-              onClick={() => setShowRestartConfirm(false)}
-              className="flex-1 py-2 px-3 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-medium transition hover:bg-slate-50 dark:hover:bg-slate-700"
-            >
+            </Button>
+            <Button variant="neutral" size="lg" className="flex-1" onClick={() => setShowRestartConfirm(false)}>
               {t("hardware.wait")}
-            </button>
+            </Button>
           </div>
         </div>
       )}

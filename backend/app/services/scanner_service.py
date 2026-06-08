@@ -327,6 +327,13 @@ async def _index_text_documents(
 
     logger.info("[%s] RAG: %d ficheros a indexar", src_label, total)
 
+    # Si hay imágenes, liberar VRAM del LLM antes de que arranque el captioning.
+    # Ollama solo puede tener un modelo cargado; sin este flush el LLM puede
+    # ocupar la VRAM cuando moondream intenta cargarse.
+    if any(f.category == "image" for f in files):
+        from app.services.rag.image_service import flush_llm_for_captioning
+        await flush_llm_for_captioning()
+
     for group_start in range(0, total, _INDEX_GROUP):
         group = files[group_start : group_start + _INDEX_GROUP]
         group_end = min(group_start + _INDEX_GROUP, total)

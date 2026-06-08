@@ -60,7 +60,7 @@ export default function SourcesPage() {
         </div>
         <button
           onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition shadow-sm"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand hover:brightness-110 active:scale-[0.98] text-white font-medium transition shadow-sm"
         >
           <FolderPlus size={18} />
           {t("sources.addButton")}
@@ -69,7 +69,7 @@ export default function SourcesPage() {
 
       {loading ? (
         <div className="flex justify-center items-center h-40">
-          <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 border-2 border-brand border-t-transparent rounded-full animate-spin" />
         </div>
       ) : (
         <SourcesList sources={sources} onDelete={handleDelete} onUpdate={handleSourceUpdate} />

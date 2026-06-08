@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { getFiles } from "../../api/stats.js";
 import { getSources } from "../../api/sources.js";
 import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
+import CategoryBadge from "../ui/CategoryBadge.jsx";
 
 function formatSize(b) {
   if (b == null) return "—";
@@ -32,15 +33,6 @@ function MetaCell({ file, t }) {
   }
   return <span>—</span>;
 }
-
-const CAT_COLORS = {
-  text:     "bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400",
-  document: "bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400",
-  image:    "bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400",
-  audio:    "bg-pink-50 dark:bg-pink-950 text-pink-600 dark:text-pink-400",
-  video:    "bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400",
-  other:    "bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400",
-};
 
 const CAT_KEYS = ["", "text", "document", "image", "audio", "video", "other"];
 
@@ -72,7 +64,7 @@ function Pagination({ page, pages, onChange, t }) {
               {gap && <span className="text-slate-300 dark:text-slate-600 text-xs px-0.5">…</span>}
               <button onClick={() => onChange(n)}
                 className={`min-w-[28px] h-7 rounded-lg text-xs font-medium transition ${
-                  n === page ? "bg-indigo-600 text-white" : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700"
+                  n === page ? "bg-brand text-white" : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700"
                 }`}>
                 {n}
               </button>
@@ -140,15 +132,15 @@ export default function FilesTable() {
     tableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  const selectCls = "text-sm border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-400";
+  const selectCls = "text-sm border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand/50";
 
   return (
-    <div ref={tableRef} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden">
+    <div ref={tableRef} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-card overflow-hidden">
       <div className="flex items-center gap-3 px-6 py-4 border-b border-slate-100 dark:border-slate-700">
         <h3 className="font-semibold text-slate-700 dark:text-slate-200 text-sm mr-auto">
           {t("files.title")}
           {total > 0 && <span className="ml-1.5 text-slate-400 dark:text-slate-500 font-normal">({total.toLocaleString()})</span>}
-          {loading && <span className="ml-2 inline-block w-3 h-3 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin align-middle" />}
+          {loading && <span className="ml-2 inline-block w-3 h-3 border-2 border-brand border-t-transparent rounded-full animate-spin align-middle" />}
         </h3>
         <select value={sourceId} onChange={(e) => { setSourceId(e.target.value); setPage(1); }} className={selectCls}>
           <option value="">{t("files.allSources")}</option>
@@ -188,9 +180,9 @@ export default function FilesTable() {
                   <div className="text-xs text-slate-400 dark:text-slate-500 truncate max-w-xs font-mono">{f.path}</div>
                 </td>
                 <td className="px-4 py-3">
-                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${CAT_COLORS[f.category] || CAT_COLORS.other}`}>
+                  <CategoryBadge category={f.category}>
                     {t(`files.categories.${f.category}`, { defaultValue: f.category })}
-                  </span>
+                  </CategoryBadge>
                 </td>
                 <td className="px-4 py-3 text-slate-600 dark:text-slate-300 whitespace-nowrap">{formatSize(f.size)}</td>
                 <td className="px-4 py-3 text-slate-500 dark:text-slate-400"><MetaCell file={f} t={t} /></td>

@@ -49,9 +49,9 @@ export default function ChangePassword() {
   }
 
   return (
-    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
+    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-card">
       <div className="flex items-center gap-2 mb-5">
-        <Lock size={18} className="text-indigo-500" />
+        <Lock size={18} className="text-brand" />
         <h2 className="font-semibold text-slate-800 dark:text-slate-100">{t("password.title")}</h2>
       </div>
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -68,8 +68,8 @@ export default function ChangePassword() {
                 className={`w-full px-4 py-2.5 pr-10 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:border-transparent transition
                   bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500
                   ${errors[field]
-                    ? "border-red-400 dark:border-red-500 focus:ring-red-400"
-                    : "border-slate-200 dark:border-slate-600 focus:ring-indigo-500"
+                    ? "border-danger focus:ring-danger/50"
+                    : "border-slate-200 dark:border-slate-600 focus:ring-brand/50"
                   }`}
               />
               <button
@@ -80,13 +80,13 @@ export default function ChangePassword() {
                 {visible[field] ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
-            {errors[field] && <p className="text-red-500 dark:text-red-400 text-xs mt-1.5">{errors[field]}</p>}
+            {errors[field] && <p className="text-danger text-xs mt-1.5">{errors[field]}</p>}
           </div>
         ))}
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm disabled:opacity-50 transition mt-2"
+          className="w-full py-2.5 px-4 rounded-xl bg-brand hover:brightness-110 active:scale-[0.98] text-white font-medium text-sm disabled:opacity-50 transition mt-2"
         >
           {loading ? t("password.saving") : t("password.submit")}
         </button>

@@ -18,7 +18,7 @@ export default function ModeSelector({ mode, onChange }) {
           onClick={() => onChange(key)}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
             mode === key
-              ? "bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm"
+              ? "bg-white dark:bg-slate-700 text-brand shadow-sm"
               : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
           }`}
         >

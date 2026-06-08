@@ -99,9 +99,9 @@ export default function RagSettingsCard() {
 
   if (loading) {
     return (
-      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
+      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-card">
         <div className="flex items-center gap-2">
-          <Loader2 size={18} className="text-indigo-500 animate-spin" />
+          <Loader2 size={18} className="text-brand animate-spin" />
           <h2 className="font-semibold text-slate-800 dark:text-slate-100">{t("ragSettings.title")}</h2>
         </div>
       </div>
@@ -155,9 +155,9 @@ export default function RagSettingsCard() {
   const update = (key, value) => setForm({ ...form, [key]: value });
 
   return (
-    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
+    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-card">
       <div className="flex items-center gap-2 mb-5">
-        <Sparkles size={18} className="text-indigo-500" />
+        <Sparkles size={18} className="text-brand" />
         <h2 className="font-semibold text-slate-800 dark:text-slate-100">{t("ragSettings.title")}</h2>
       </div>
 
@@ -204,8 +204,8 @@ export default function RagSettingsCard() {
         </div>
 
         {!doclingInstalled && doclingState === "idle" && (
-          <div className="mt-2 ml-6 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
-            <p className="text-xs text-amber-700 dark:text-amber-400 mb-2">
+          <div className="mt-2 ml-6 p-3 rounded-xl bg-slate-50 dark:bg-slate-700/30 border border-slate-200 dark:border-slate-600">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
               {t(
                 "ragSettings.doclingNotInstalled",
                 "Requiere instalar Docling (~2 GB: torch + transformers + modelos)."
@@ -213,7 +213,7 @@ export default function RagSettingsCard() {
             </p>
             <button
               onClick={handleInstallDocling}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium transition"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-brand hover:brightness-110 active:scale-[0.97] text-white text-xs font-medium transition"
             >
               <Download size={12} />
               {t("ragSettings.installDocling", "Instalar Docling")}
@@ -222,19 +222,19 @@ export default function RagSettingsCard() {
         )}
 
         {doclingState === "installing" && (
-          <div className="mt-2 ml-6 flex items-center gap-2 text-xs text-indigo-600 dark:text-indigo-400">
+          <div className="mt-2 ml-6 flex items-center gap-2 text-xs text-brand">
             <Loader2 size={12} className="animate-spin" />
             {t("ragSettings.installingDocling", "Descargando Docling (puede tardar 5-10 min)...")}
           </div>
         )}
         {doclingState === "done" && (
-          <div className="mt-2 ml-6 flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400">
+          <div className="mt-2 ml-6 flex items-center gap-2 text-xs text-success">
             <CheckCircle size={12} />
             {t("ragSettings.doclingInstalled", "Docling instalado. Activa el interruptor para usarlo.")}
           </div>
         )}
         {doclingState === "error" && (
-          <div className="mt-2 ml-6 flex items-center gap-2 text-xs text-red-600 dark:text-red-400">
+          <div className="mt-2 ml-6 flex items-center gap-2 text-xs text-danger">
             <AlertCircle size={12} />
             {t("ragSettings.doclingError", "Error instalando Docling. Mira los logs del backend.")}
           </div>
@@ -271,7 +271,7 @@ export default function RagSettingsCard() {
           value={form.ocrQuality || "mobile"}
           disabled={busy || !(form.indexMultimedia ?? true)}
           onChange={(e) => update("ocrQuality", e.target.value)}
-          className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-50"
+          className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand/50 disabled:opacity-50"
         >
           {OCR_QUALITY_OPTIONS.map((m) => (
             <option key={m.id} value={m.id}>
@@ -290,7 +290,7 @@ export default function RagSettingsCard() {
           value={form.whisperModel || "small"}
           disabled={busy || !(form.indexMultimedia ?? true)}
           onChange={(e) => update("whisperModel", e.target.value)}
-          className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-50"
+          className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand/50 disabled:opacity-50"
         >
           {WHISPER_MODELS.map((m) => (
             <option key={m.id} value={m.id}>
@@ -320,7 +320,7 @@ export default function RagSettingsCard() {
                 const v = parseInt(e.target.value);
                 update("videoFrameInterval", isNaN(v) ? 30 : Math.max(1, Math.min(60, v)));
               }}
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-50"
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand/50 disabled:opacity-50"
             />
             <span className="text-xs text-slate-400">s</span>
           </div>
@@ -342,7 +342,7 @@ export default function RagSettingsCard() {
               const v = parseInt(e.target.value);
               update("videoMaxFrames", isNaN(v) ? 20 : Math.max(1, Math.min(60, v)));
             }}
-            className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-50"
+            className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand/50 disabled:opacity-50"
           />
         </div>
       </div>
@@ -351,13 +351,13 @@ export default function RagSettingsCard() {
       {state === "idle" && hasChanges && (
         <>
           {needsRestart && (
-            <div className="text-xs text-amber-600 dark:text-amber-400 mb-2 flex items-center gap-1.5">
+            <div className="text-xs text-warning mb-2 flex items-center gap-1.5">
               <AlertCircle size={12} /> {t("ragSettings.restartRequired")}
             </div>
           )}
           <button
             onClick={handleApply}
-            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-medium transition"
+            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-brand hover:brightness-110 active:scale-[0.98] text-white text-sm font-medium transition"
           >
             <RefreshCw size={15} />
             {needsRestart ? t("ragSettings.applyRestart") : t("ragSettings.apply")}
@@ -366,24 +366,24 @@ export default function RagSettingsCard() {
       )}
 
       {state === "saving" && (
-        <div className="flex items-center gap-2 text-sm text-indigo-600 dark:text-indigo-400">
+        <div className="flex items-center gap-2 text-sm text-brand">
           <Loader2 size={15} className="animate-spin" />
           {t("ragSettings.saving")}
         </div>
       )}
       {state === "restarting" && (
-        <div className="flex items-center gap-2 text-sm text-indigo-600 dark:text-indigo-400">
+        <div className="flex items-center gap-2 text-sm text-brand">
           <Loader2 size={15} className="animate-spin" />
           {t("ragSettings.restarting")}
         </div>
       )}
       {state === "done" && (
-        <div className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400">
+        <div className="flex items-center gap-2 text-sm text-success">
           <CheckCircle size={15} /> {t("ragSettings.done")}
         </div>
       )}
       {state === "error" && (
-        <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
+        <div className="flex items-center gap-2 text-sm text-danger">
           <AlertCircle size={15} /> {t("ragSettings.error")}
         </div>
       )}
@@ -400,7 +400,7 @@ function Toggle({ checked, onChange, disabled }) {
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
-        checked ? "bg-indigo-500" : "bg-slate-300 dark:bg-slate-600"
+        checked ? "bg-brand" : "bg-slate-300 dark:bg-slate-600"
       }`}
     >
       <span

@@ -1,6 +1,81 @@
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* ──────────────────────────────────────────────────────────────────────────
+   Tokens de color (valores crudos). Modo claro en :root, modo oscuro en .dark.
+   Los fg de categorías/semánticos se aclaran en oscuro para mantener contraste;
+   los fondos "soft" se derivan por color-mix (translúcidos → se adaptan solos).
+   ────────────────────────────────────────────────────────────────────────── */
+:root {
+  /* Marca */
+  --brand: #6d4aec;
+
+  /* Semánticos (cada uno con un único significado) */
+  --success: #16a34a;
+  --warning: #d97706;
+  --danger:  #dc2626;
+
+  /* Categorías: vivas y distintas entre sí. Documento=naranja e imagen=teal
+     (no ámbar/verde) para no colisionar con los semánticos aviso/éxito. */
+  --cat-text:     #0891b2;
+  --cat-document: #ea580c;
+  --cat-image:    #0d9488;
+  --cat-audio:    #db2777;
+  --cat-video:    #2563eb;
+  --cat-other:    #64748b;
+
+  /* Duraciones de motion */
+  --dur-press:  130ms;
+  --dur-ui:     200ms;
+  --dur-reveal: 320ms;
+}
+
+.dark {
+  --brand: #8b6cf0;
+
+  --success: #34d058;
+  --warning: #f0a955;
+  --danger:  #f06a6a;
+
+  --cat-text:     #22d3ee;
+  --cat-document: #fb923c;
+  --cat-image:    #2dd4bf;
+  --cat-audio:    #f472b6;
+  --cat-video:    #60a5fa;
+  --cat-other:    #94a3b8;
+}
+
+/* Exposición como utilidades de Tailwind v4. `inline` permite que las variables
+   referenciadas (que cambian en .dark) se resuelvan en el punto de uso. */
+@theme inline {
+  --color-brand:        var(--brand);
+  --color-brand-soft:   color-mix(in oklab, var(--brand) 14%, transparent);
+
+  --color-success:      var(--success);
+  --color-success-soft: color-mix(in oklab, var(--success) 14%, transparent);
+  --color-warning:      var(--warning);
+  --color-warning-soft: color-mix(in oklab, var(--warning) 14%, transparent);
+  --color-danger:       var(--danger);
+  --color-danger-soft:  color-mix(in oklab, var(--danger) 14%, transparent);
+
+  --color-cat-text:          var(--cat-text);
+  --color-cat-text-soft:     color-mix(in oklab, var(--cat-text) 14%, transparent);
+  --color-cat-document:      var(--cat-document);
+  --color-cat-document-soft: color-mix(in oklab, var(--cat-document) 14%, transparent);
+  --color-cat-image:         var(--cat-image);
+  --color-cat-image-soft:    color-mix(in oklab, var(--cat-image) 14%, transparent);
+  --color-cat-audio:         var(--cat-audio);
+  --color-cat-audio-soft:    color-mix(in oklab, var(--cat-audio) 14%, transparent);
+  --color-cat-video:         var(--cat-video);
+  --color-cat-video-soft:    color-mix(in oklab, var(--cat-video) 14%, transparent);
+  --color-cat-other:         var(--cat-other);
+  --color-cat-other-soft:    color-mix(in oklab, var(--cat-other) 14%, transparent);
+
+  /* Curvas de easing fuertes (las nativas de CSS son flojas) */
+  --ease-out:        cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-emphasized: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -24,7 +99,83 @@ body {
   min-height: 100vh;
 }
 
+/* ──────────────────────────────────────────────────────────────────────────
+   Superficies: sombras tintadas (slate), nunca negro puro.
+   ────────────────────────────────────────────────────────────────────────── */
+.shadow-card {
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.04), 0 2px 8px rgb(15 23 42 / 0.05);
+}
+.dark .shadow-card {
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.20), 0 2px 8px rgb(0 0 0 / 0.24);
+}
+/* Elevación al hover para cards interactivas (sombra tintada de marca) */
+.shadow-card-hover {
+  box-shadow: 0 6px 20px color-mix(in oklab, var(--brand) 18%, transparent);
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Motion. Cada animación con un porqué; todo degradable por reduced-motion.
+   ────────────────────────────────────────────────────────────────────────── */
 @keyframes scanning {
   0%   { transform: translateX(-100%); }
   100% { transform: translateX(400%); }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes shimmer {
+  100% { transform: translateX(100%); }
+}
+
+/* Entrada escalonada: el componente fija --stagger por item. */
+@media (prefers-reduced-motion: no-preference) {
+  .reveal-up {
+    animation: fade-up var(--dur-reveal) var(--ease-emphasized) both;
+    animation-delay: calc(var(--stagger, 0) * 55ms);
+  }
+}
+
+/* Skeleton con barrido de luz */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: rgb(226 232 240 / 0.7);
+}
+.dark .skeleton {
+  background: rgb(51 65 85 / 0.6);
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.45), transparent);
+  animation: shimmer 1.5s infinite;
+}
+.dark .skeleton::after {
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.08), transparent);
+}
+
+/* Barrido sobre la barra de progreso activa */
+.progress-shimmer {
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.35), transparent);
+  animation: shimmer 1.6s infinite;
+}
+
+/* Accesibilidad: respeta la preferencia de movimiento reducido. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

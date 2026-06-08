@@ -7,6 +7,7 @@ import fitz
 
 from app.core import runtime_settings
 from app.services.rag.extractors.base import BaseExtractor
+from app.services.rag.extractors.ocr_fallback import looks_garbled, ocr_pdf
 from app.services.rag.extractors.pdf_docling import (
     DoclingPdfExtractor,
     is_docling_installed,
@@ -58,6 +59,17 @@ class PdfExtractor(BaseExtractor):
             full_text = "".join(parts)
         finally:
             doc.close()
+
+        # Capa de texto corrupta (cmap roto en PDFs firmados/subset): el texto
+        # se renderiza bien pero se extrae como gibberish. Caemos a OCR, que
+        # lee los glifos visualmente. Ver ocr_fallback.looks_garbled.
+        if looks_garbled(full_text):
+            logger.info(
+                "PDF %s: capa de texto corrupta detectada → re-extrayendo con OCR",
+                path.name,
+            )
+            return ocr_pdf(path)
+
         return ExtractedDoc(text=full_text, page_map=page_map, extractor="pdf")
 
     def supported_extensions(self) -> list[str]:

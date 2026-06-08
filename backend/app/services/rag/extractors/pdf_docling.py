@@ -42,6 +42,7 @@ import fitz
 
 from app.services.rag._lazy import LazyService
 from app.services.rag.extractors.base import BaseExtractor
+from app.services.rag.extractors.ocr_fallback import looks_garbled, ocr_pdf
 from app.services.rag.types import ExtractedDoc
 
 if TYPE_CHECKING:
@@ -57,6 +58,12 @@ _SCALE_SCANNED = 2.0
 # Heuristica de deteccion escaneado vs digital (ver _pdf_is_scanned).
 _SAMPLE_PAGES = 5
 _MIN_CHARS_PER_PAGE = 50
+
+# Umbral de tamaño: PDFs mas pesados tienen paginas con mucho contenido visual
+# (imagenes embebidas, graficos) que Docling rasteriza por pagina para el analisis
+# de layout, disparando OOM incluso sin OCR. Por encima de este limite se usa
+# PyMuPDF directamente — mas rapido y sin limite de memoria.
+_MAX_FILE_BYTES = 10 * 1024 * 1024  # 10 MB
 
 
 def _make_converter(*, do_ocr: bool, images_scale: float) -> "DocumentConverter":
@@ -106,11 +113,14 @@ def is_docling_installed() -> bool:
 
 
 def _pdf_is_scanned(path: Path) -> bool:
-    """Heuristica: un PDF escaneado tiene paginas que son imagenes sin texto
-    embebido. Muestreamos hasta _SAMPLE_PAGES paginas repartidas por el
-    documento y medimos el texto extraible con PyMuPDF (<100 ms). Si la media
-    de caracteres por pagina muestreada es muy baja, lo tratamos como escaneado
-    (necesita OCR a alta resolucion).
+    """Heuristica: un PDF necesita OCR si (a) es escaneado —paginas que son
+    imagenes sin texto embebido— o (b) tiene la capa de texto corrupta (cmap
+    roto en PDFs firmados/subset: parece tener texto, pero es gibberish).
+
+    Muestreamos hasta _SAMPLE_PAGES paginas repartidas por el documento y
+    medimos el texto extraible con PyMuPDF (<100 ms). Si la media de caracteres
+    por pagina es muy baja → escaneado. Si hay texto pero looks_garbled() →
+    capa corrupta. En ambos casos hace falta OCR a alta resolucion.
 
     Ante cualquier error o duda devolvemos False (digital): preferimos no
     forzar el OCR caro y arriesgar OOM en un PDF que en realidad tiene texto.
@@ -125,8 +135,10 @@ def _pdf_is_scanned(path: Path) -> bool:
             return False
         step = max(1, total // _SAMPLE_PAGES)
         idxs = list(range(0, total, step))[:_SAMPLE_PAGES]
-        chars = sum(len(doc[i].get_text("text").strip()) for i in idxs)
-        return (chars / len(idxs)) < _MIN_CHARS_PER_PAGE
+        sample = "".join(doc[i].get_text("text") for i in idxs)
+        if (len(sample.strip()) / len(idxs)) < _MIN_CHARS_PER_PAGE:
+            return True  # escaneado: poco o nada de texto embebido
+        return looks_garbled(sample)  # hay texto pero es basura → OCR
     except Exception:
         return False
     finally:
@@ -135,6 +147,42 @@ def _pdf_is_scanned(path: Path) -> bool:
 
 class DoclingPdfExtractor(BaseExtractor):
     def extract(self, path: Path) -> ExtractedDoc:
+        # PDFs grandes tienen paginas con mucho contenido visual: Docling las
+        # rasteriza todas para el analisis de layout y se queda sin memoria.
+        # El tamaño en disco es el proxy mas barato y fiable (stat(), <1 ms).
+        try:
+            file_size = path.stat().st_size
+        except OSError:
+            file_size = 0
+        if file_size > _MAX_FILE_BYTES:
+            size_mb = file_size / (1024 * 1024)
+            logger.info(
+                "Docling: %s (%.0f MB) supera umbral de %d MB → PyMuPDF",
+                path.name, size_mb, _MAX_FILE_BYTES // (1024 * 1024),
+            )
+            # Usar fitz directamente — no PdfExtractor().extract() porque éste
+            # re-enruta a Docling cuando useDocling=True, creando recursión infinita.
+            doc = fitz.open(str(path))
+            try:
+                parts: list[str] = []
+                page_map: list[tuple[int, int]] = []
+                offset = 0
+                for i, page in enumerate(doc, start=1):
+                    page_map.append((i, offset))
+                    text = page.get_text("text")
+                    parts.append(text)
+                    offset += len(text)
+                full_text = "".join(parts)
+            finally:
+                doc.close()
+            if looks_garbled(full_text):
+                logger.info(
+                    "PDF %s: capa de texto corrupta detectada → re-extrayendo con OCR",
+                    path.name,
+                )
+                return ocr_pdf(path)
+            return ExtractedDoc(text=full_text, page_map=page_map, extractor="pdf")
+
         scanned = _pdf_is_scanned(path)
         lazy = _converter_scanned if scanned else _converter_digital
         converter = lazy.get()

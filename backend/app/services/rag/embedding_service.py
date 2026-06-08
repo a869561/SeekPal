@@ -68,6 +68,15 @@ import numpy as np  # noqa: E402
 from fastembed import SparseTextEmbedding, TextEmbedding  # noqa: E402
 from qdrant_client.http.models import SparseVector  # noqa: E402
 
+# Suprimir warnings informativos de ORT sobre asignación de nodos a providers.
+# ORT asigna intencionalmente ops de shape a CPU aunque el provider preferido sea
+# CUDA — es optimización deliberada, no un problema. Nivel 3 = solo errores reales.
+try:
+    import onnxruntime as _ort
+    _ort.set_default_logger_severity(3)
+except Exception:
+    pass
+
 _CTRL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f�]")
 _MIN_SPLIT_CHARS = 80
 

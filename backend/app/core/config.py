@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     # Multiplicador para sobre-recuperar candidatos antes del rerank.
     # Vector search devuelve top_k * multiplier y el reranker filtra a top_k.
     rag_reranker_multiplier: int = 3
+    # Suelo de relevancia: tras el rerank se descartan candidatos cuyo score
+    # quede por debajo de este umbral, evitando alimentar al LLM con relleno
+    # irrelevante en queries sin buen match. jina-reranker-v2 emite logits
+    # (>=0 ~= relevante), asi que 0.0 es la frontera natural. Siempre se
+    # conserva al menos 1 resultado. Aplica solo cuando el reranker esta activo.
+    rag_reranker_min_score: float = 0.0
 
     # MMR (Maximum Marginal Relevance): tras retrieval+rerank, reordena el
     # top_k para diversificar — evita que sean todos del mismo fichero.

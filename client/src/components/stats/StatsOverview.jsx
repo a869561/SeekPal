@@ -1,5 +1,7 @@
 import { useTranslation } from "react-i18next";
-import { FileText, HardDrive, Database, BookOpen } from "lucide-react";
+import { FileText, HardDrive, Database, Clock } from "lucide-react";
+import StatCard from "../ui/StatCard.jsx";
+import { relativeTime, absoluteDateTime } from "../../utils/relativeTime.js";
 
 function formatSize(bytes) {
   if (!bytes) return "0 B";
@@ -9,59 +11,48 @@ function formatSize(bytes) {
 }
 
 export default function StatsOverview({ summary }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const locale = i18n.language || "es";
 
   const CARDS = [
     {
       key: "totalFiles",
       label: t("stats.totalFiles"),
       icon: FileText,
-      color: "bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400",
       fmt: (v) => v?.toLocaleString() ?? "0",
     },
     {
       key: "totalSize",
       label: t("stats.totalSize"),
       icon: HardDrive,
-      color: "bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400",
       fmt: formatSize,
     },
     {
       key: "activeSources",
       label: t("stats.activeSources"),
       icon: Database,
-      color: "bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400",
       fmt: (v) => v ?? "0",
     },
     {
-      key: "byCategory",
-      label: t("stats.documents"),
-      icon: BookOpen,
-      color: "bg-purple-50 dark:bg-purple-950 text-purple-600 dark:text-purple-400",
-      fmt: (cats) => {
-        if (!Array.isArray(cats)) return "0";
-        return cats
-          .filter((c) => c._id === "text" || c._id === "document")
-          .reduce((acc, c) => acc + (c.count || 0), 0)
-          .toLocaleString();
-      },
+      key: "lastIndexed",
+      label: t("stats.lastIndexed"),
+      icon: Clock,
+      fmt: (v) => (v ? relativeTime(v, locale) : t("stats.never")),
+      titleFmt: (v) => (v ? absoluteDateTime(v, locale) : t("stats.never")),
     },
   ];
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-      {CARDS.map(({ key, label, icon: Icon, color, fmt }) => (
-        <div key={key} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm flex items-center gap-4">
-          <div className={`flex-shrink-0 inline-flex p-3 rounded-xl ${color}`}>
-            <Icon size={22} />
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-slate-800 dark:text-slate-100 leading-none">
-              {summary ? fmt(summary[key]) : "—"}
-            </div>
-            <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">{label}</div>
-          </div>
-        </div>
+      {CARDS.map(({ key, label, icon, fmt, titleFmt }, i) => (
+        <StatCard
+          key={key}
+          index={i}
+          icon={icon}
+          label={label}
+          value={summary ? fmt(summary[key]) : "—"}
+          title={summary && titleFmt ? titleFmt(summary[key]) : undefined}
+        />
       ))}
     </div>
   );

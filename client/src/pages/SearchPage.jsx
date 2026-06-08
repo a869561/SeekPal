@@ -10,7 +10,7 @@ import ModeSelector from "../components/search/ModeSelector.jsx";
 import ClassicResults from "../components/search/ClassicResults.jsx";
 import ChatResponse from "../components/search/ChatResponse.jsx";
 
-const selectCls = "text-sm border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-400";
+const selectCls = "text-sm border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand/50";
 const CAT_KEYS = ["", "text", "document", "image", "audio", "video", "other"];
 
 export default function SearchPage() {
@@ -117,8 +117,8 @@ export default function SearchPage() {
     return (
       <div className="min-h-full flex flex-col items-center px-6 pt-20">
         <div className="text-center mb-8">
-          <div className="inline-flex p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-950 mb-4">
-            <Search size={32} className="text-indigo-600 dark:text-indigo-400" />
+          <div className="inline-flex p-4 rounded-2xl bg-brand-soft mb-4">
+            <Search size={32} className="text-brand" />
           </div>
           <h1 className="text-3xl font-bold text-slate-800 dark:text-slate-100 mb-2">{t("search.landing.title")}</h1>
           <p className="text-slate-500 dark:text-slate-400 text-sm">{t("search.landing.subtitle")}</p>
@@ -138,11 +138,11 @@ export default function SearchPage() {
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={mode === "ask" ? t("ask.placeholder") : t("search.placeholder")}
                 autoFocus
-                className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition text-sm shadow-sm"
+                className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand/50 focus:border-transparent transition text-sm shadow-sm"
               />
             </div>
             <button type="submit"
-              className="px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm transition shadow-sm flex-shrink-0">
+              className="px-5 py-3 rounded-xl bg-brand hover:brightness-110 active:scale-[0.98] text-white font-semibold text-sm transition shadow-sm flex-shrink-0">
               {mode === "ask" ? t("ask.submit") : t("search.submit")}
             </button>
           </div>
@@ -157,7 +157,7 @@ export default function SearchPage() {
                   const resolved = mode === "auto" ? classifyQuery(r) : mode;
                   if (resolved === "ask") runAsk(r); else runSearch(r);
                 }}
-                  className="text-sm px-4 py-2 rounded-full border border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-400 bg-white dark:bg-slate-800 transition truncate max-w-xs">
+                  className="text-sm px-4 py-2 rounded-full border border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-brand hover:text-brand bg-white dark:bg-slate-800 transition truncate max-w-xs">
                   {r}
                 </button>
               ))}
@@ -194,11 +194,11 @@ export default function SearchPage() {
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={mode === "ask" ? t("ask.placeholder") : t("search.placeholder")}
                 autoFocus
-                className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition text-sm shadow-sm"
+                className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand/50 focus:border-transparent transition text-sm shadow-sm"
               />
             </div>
             <button type="submit"
-              className="px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm transition shadow-sm flex-shrink-0">
+              className="px-5 py-3 rounded-xl bg-brand hover:brightness-110 active:scale-[0.98] text-white font-semibold text-sm transition shadow-sm flex-shrink-0">
               {mode === "ask" ? t("ask.submit") : t("search.submit")}
             </button>
           </div>
@@ -222,8 +222,8 @@ export default function SearchPage() {
         {activeMode === "ask" ? (
           <>
             {askError && (
-              <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 text-sm text-red-600 dark:text-red-400">
-                {t("ask.error.generic")} — {askError.message}
+              <div className="p-3 rounded-lg bg-danger-soft border border-danger/20 text-sm text-danger">
+                {t("ask.error.generic")}: {askError.message}
               </div>
             )}
             <ChatResponse citations={citations} text={responseText} loading={asking} />

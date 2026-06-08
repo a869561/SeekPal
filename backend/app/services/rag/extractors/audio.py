@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from app.services.rag.audio_service import transcribe
 from app.services.rag.extractors.base import BaseExtractor
 from app.services.rag.types import ExtractedDoc
+
+logger = logging.getLogger("seekpal.audio")
 
 
 class AudioExtractor(BaseExtractor):
@@ -16,7 +19,11 @@ class AudioExtractor(BaseExtractor):
     ]
 
     def extract(self, path: Path) -> ExtractedDoc:
-        text = transcribe(path)
+        try:
+            text = transcribe(path)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Audio %s: transcripcion fallida (%s) — omitido", path.name, exc)
+            text = ""
         return ExtractedDoc(text=text, page_map=[], extractor="audio")
 
     def supported_extensions(self) -> list[str]:

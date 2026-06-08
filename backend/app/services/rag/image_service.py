@@ -13,10 +13,11 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from ollama import Client
+from ollama import AsyncClient, Client
 
 from app.services.rag._lazy import LazyService
 
@@ -127,7 +128,8 @@ def _load_caption_client() -> Client:
 
 _ocr = LazyService("OCR", _load_ocr)
 _caption = LazyService("Captioning", _load_caption_client)
-_caption_failures = 0   # fallos consecutivos; ≥3 desactiva captioning
+_caption_errors = 0  # errores de modelo/imagen (no conexion); >=5 desactiva
+_caption_lock = threading.Semaphore(1)  # solo un captioning a la vez en Ollama
 
 # Registrar modelos lazy para que get_model_status() los incluya
 from app.services.rag._lazy import register as _register  # noqa: E402
@@ -164,55 +166,85 @@ def caption_image(path: Path) -> str:
     Sincrono: se invoca desde extractores que corren en threads worker. Usa el
     Client sincrono de ollama para evitar el "Event loop is closed" que daba el
     AsyncClient cacheado entre loops creados por asyncio.run().
+
+    Politica de fallos:
+    - Ollama ocupado/timeout (fallo TEMPORAL): se omite esta imagen sin
+      deshabilitar. La siguiente imagen lo intentara igualmente — el timeout
+      de 30s ya limita el coste por imagen.
+    - Modelo no instalado (fallo PERMANENTE): se desactiva inmediatamente para
+      toda la sesion (el modelo no va a aparecer solo).
+    - Error de modelo/imagen (fallo de CONTENIDO): se desactiva tras 5 consecutivos.
     """
-    global _caption_failures
+    global _caption_errors
     client = _caption.get()
     if client is None:
         return ""
+    with _caption_lock:
+        try:
+            resp = client.chat(
+                model=_MOONDREAM_MODEL,
+                messages=[{
+                    "role": "user",
+                    "content": _CAPTION_PROMPT,
+                    "images": [str(path)],
+                }],
+                options={"temperature": 0.2, "num_ctx": 2048},
+            )
+            _caption_errors = 0
+            return (resp.message.content or "").strip()
+        except Exception as exc:  # noqa: BLE001
+            msg = str(exc).lower()
+
+            model_missing = ("not found" in msg) or ("model" in msg and "pull" in msg)
+            ollama_unavailable = (
+                "connect" in msg
+                or "refused" in msg
+                or "unreachable" in msg
+                or "timeout" in msg
+                or "timed out" in msg
+                or "failed to connect" in msg
+            )
+
+            if model_missing:
+                logger.warning(
+                    "Modelo '%s' no descargado en Ollama ('ollama pull %s'). "
+                    "Captioning desactivado para esta sesion.",
+                    _MOONDREAM_MODEL, _MOONDREAM_MODEL,
+                )
+                _caption.disable()
+                _caption_errors = 0
+            elif ollama_unavailable:
+                logger.debug("Captioning: Ollama ocupado/timeout para %s, se omite.", path.name)
+            else:
+                _caption_errors += 1
+                if _caption_errors >= 5:
+                    logger.warning(
+                        "Captioning: 5 errores consecutivos de modelo/imagen. "
+                        "Desactivado para esta sesion."
+                    )
+                    _caption.disable()
+                    _caption_errors = 0
+                else:
+                    logger.warning("Captioning fallo en %s: %s", path.name, exc)
+            return ""
+
+
+async def flush_llm_for_captioning() -> None:
+    """Descarga el modelo LLM de VRAM antes de la fase de captioning.
+
+    Ollama solo puede tener un modelo cargado a la vez. Si el LLM estaba
+    activo, esta llamada con keep_alive=0 lo descarga inmediatamente para
+    que moondream pueda cargar sin necesidad de swap durante la ingesta.
+    Fallo silencioso: si Ollama no responde o el modelo ya estaba descargado,
+    el captioning lo intentará igualmente.
+    """
+    from app.core.config import settings
     try:
-        resp = client.chat(
-            model=_MOONDREAM_MODEL,
-            messages=[{
-                "role": "user",
-                "content": _CAPTION_PROMPT,
-                "images": [str(path)],
-            }],
-            options={"temperature": 0.2, "num_ctx": 2048},
-        )
-        _caption_failures = 0
-        return (resp.message.content or "").strip()
-    except Exception as exc:  # noqa: BLE001
-        msg = str(exc).lower()
-        _caption_failures += 1
-
-        model_missing = ("not found" in msg) or ("model" in msg and "pull" in msg)
-        ollama_unavailable = (
-            "connect" in msg
-            or "refused" in msg
-            or "unreachable" in msg
-            or "timeout" in msg
-            or "timed out" in msg
-            or "failed to connect" in msg
-        )
-
-        if model_missing:
-            logger.warning(
-                "Modelo '%s' no descargado en Ollama ('ollama pull %s'). "
-                "Captioning desactivado para esta sesion.",
-                _MOONDREAM_MODEL, _MOONDREAM_MODEL,
-            )
-            _caption.disable()
-            _caption_failures = 0
-        elif ollama_unavailable or _caption_failures >= 3:
-            logger.warning(
-                "Ollama no disponible para captioning (ocupado, sin conexion o timeout). "
-                "Captioning desactivado para esta sesion de indexado."
-            )
-            _caption.disable()
-            _caption_failures = 0
-        else:
-            logger.warning("Captioning fallo en %s: %s", path.name, exc)
-        return ""
+        client = AsyncClient(host=_OLLAMA_URL, timeout=10.0)
+        await client.generate(model=settings.llm_model, prompt="", keep_alive=0)
+        logger.debug("flush_llm_for_captioning: '%s' descargado de VRAM", settings.llm_model)
+    except Exception:
+        pass  # No crítico: el captioning reintentará igualmente
 
 
 def extract_image_text(path: Path) -> str:
