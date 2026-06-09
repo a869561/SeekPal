@@ -11,6 +11,7 @@ Ambas piezas son lazy: solo se cargan/usan cuando hay imagenes que indexar.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import threading
@@ -251,6 +252,113 @@ def extract_image_text(path: Path) -> str:
     """Combina OCR + caption en un solo texto indexable."""
     caption = caption_image(path)
     ocr = ocr_image(path)
+    parts: list[str] = []
+    if caption:
+        parts.append(f"Descripcion: {caption}")
+    if ocr:
+        parts.append(f"Texto en la imagen: {ocr}")
+    return "\n\n".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# Versión async (usada por index_service.prepare_file para imágenes)
+# ---------------------------------------------------------------------------
+
+# asyncio.Semaphore para limitar a 1 caption concurrente — igual que
+# _caption_lock, pero genuinamente cancelable: cuando asyncio.wait_for
+# dispara, el semáforo se libera de inmediato sin dejar threads zombi.
+_async_caption_sem = asyncio.Semaphore(1)
+
+
+async def caption_image_async(path: Path) -> str:
+    """Caption con AsyncClient + asyncio.Semaphore — cancelable por asyncio.
+
+    A diferencia de caption_image (sync + threading.Semaphore), esta versión
+    puede ser cancelada por asyncio.wait_for sin dejar threads bloqueados en
+    el semáforo, eliminando los timeouts en cascada entre imágenes del mismo
+    grupo de ingesta.
+    """
+    global _caption_errors
+    if _caption.disabled:
+        return ""
+
+    async with _async_caption_sem:
+        try:
+            # AsyncClient creado por llamada (no cacheado) para evitar
+            # "Event loop is closed" al reutilizar entre event loops distintos.
+            client = AsyncClient(host=_OLLAMA_URL, timeout=30.0)
+            resp = await client.chat(
+                model=_MOONDREAM_MODEL,
+                messages=[{
+                    "role": "user",
+                    "content": _CAPTION_PROMPT,
+                    "images": [str(path)],
+                }],
+                options={"temperature": 0.2, "num_ctx": 2048},
+            )
+            _caption_errors = 0
+            return (resp.message.content or "").strip()
+        except asyncio.CancelledError:
+            raise  # propagar: el semáforo ya se liberó en __aexit__
+        except Exception as exc:  # noqa: BLE001
+            msg = str(exc).lower()
+            model_missing = ("not found" in msg) or ("model" in msg and "pull" in msg)
+            ollama_unavailable = (
+                "connect" in msg or "refused" in msg or "unreachable" in msg
+                or "timeout" in msg or "timed out" in msg or "failed to connect" in msg
+            )
+            if model_missing:
+                logger.warning(
+                    "Modelo '%s' no descargado en Ollama ('ollama pull %s'). "
+                    "Captioning desactivado para esta sesion.",
+                    _MOONDREAM_MODEL, _MOONDREAM_MODEL,
+                )
+                _caption.disable()
+                _caption_errors = 0
+            elif ollama_unavailable:
+                logger.debug("Captioning: Ollama ocupado/timeout para %s, se omite.", path.name)
+            else:
+                _caption_errors += 1
+                if _caption_errors >= 5:
+                    logger.warning(
+                        "Captioning: 5 errores consecutivos. Desactivado para esta sesion."
+                    )
+                    _caption.disable()
+                    _caption_errors = 0
+                else:
+                    logger.warning("Captioning fallo en %s: %s", path.name, exc)
+            return ""
+
+
+async def extract_image_text_async(path: Path) -> str:
+    """OCR + captioning en paralelo con timeouts independientes.
+
+    OCR (CPU, sin red) y captioning (Ollama async) corren simultáneamente.
+    Si captioning tarda demasiado o falla, OCR ya tiene resultado → el fichero
+    nunca se marca como error solo por lentitud del modelo de visión.
+
+    Timeouts internos (menores que el outer 120s del scanner):
+      - OCR: 30s (RapidOCR en imágenes grandes, muy rara vez >5s)
+      - Caption: 90s (Moondream en Ollama; incluye espera de semáforo)
+    """
+    async def _ocr_task() -> str:
+        try:
+            return await asyncio.wait_for(
+                asyncio.to_thread(ocr_image, path), timeout=30.0,
+            )
+        except Exception:  # noqa: BLE001
+            return ""
+
+    async def _caption_task() -> str:
+        try:
+            return await asyncio.wait_for(
+                caption_image_async(path), timeout=90.0,
+            )
+        except Exception:  # noqa: BLE001
+            return ""
+
+    ocr, caption = await asyncio.gather(_ocr_task(), _caption_task())
+
     parts: list[str] = []
     if caption:
         parts.append(f"Descripcion: {caption}")

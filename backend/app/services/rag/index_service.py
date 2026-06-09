@@ -21,7 +21,8 @@ from app.services.rag.chunking_service import chunk_text
 from app.services.rag.embedding_service import EmbeddingService, SparseEmbeddingService
 from app.services.rag.extractors.base import BaseExtractor
 from app.services.rag.extractors.registry import get_extractor
-from app.services.rag.types import Chunk
+from app.services.rag.image_service import extract_image_text_async
+from app.services.rag.types import Chunk, ExtractedDoc
 from app.services.rag.vector_service import VectorService
 
 
@@ -152,7 +153,15 @@ class IndexService:
         ext_name = _extractor_name(extractor)
 
         try:
-            doc = await asyncio.to_thread(extractor.extract, path)
+            if category == "image":
+                # Ruta async: OCR + captioning en paralelo con timeouts independientes.
+                # asyncio.wait_for puede cancelar genuinamente (AsyncClient +
+                # asyncio.Semaphore), eliminando los timeouts en cascada entre
+                # imágenes del mismo grupo causados por threads zombi.
+                text = await extract_image_text_async(path)
+                doc = ExtractedDoc(text=text, page_map=[], extractor="image")
+            else:
+                doc = await asyncio.to_thread(extractor.extract, path)
         except Exception as exc:
             return PreparedFile(file_id, source_id, file_name, category, extension,
                                 extractor=ext_name, error=f"extraction: {exc}")
