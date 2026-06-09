@@ -197,8 +197,15 @@ class DoclingPdfExtractor(BaseExtractor):
             path.name,
             "escaneado (OCR)" if scanned else "digital (sin OCR)",
         )
-        result = converter.convert(str(path))
-        markdown = result.document.export_to_markdown()
+        try:
+            result = converter.convert(str(path))
+            markdown = result.document.export_to_markdown()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "Docling: %s falló (%s) → fallback a OCR con RapidOCR",
+                path.name, exc,
+            )
+            return ocr_pdf(path)
 
         # Docling no expone offsets pagina por pagina en el markdown final.
         # Para cumplir el contrato de ExtractedDoc reconstruimos un page_map
