@@ -1,10 +1,14 @@
-"""Procesado de imagenes: OCR (rapidocr-onnxruntime) + captioning (Moondream via Ollama).
+"""Procesado de imagenes: OCR (rapidocr-onnxruntime) + captioning (vision LLM via Ollama).
 
 Combina dos pipelines complementarios:
   - OCR: extrae texto incrustado (screenshots, scans, pizarras con escritura).
   - Captioning: descripcion en lenguaje natural de la escena (gente, objetos,
-    composicion). Usa Moondream2 servido por Ollama, reutilizando el cliente
-    existente del LLM (sin torch ni transformers, solo HTTP a localhost:11434).
+    composicion). Usa un modelo de vision via Ollama (por defecto moondream;
+    recomendado qwen2.5-vl:3b para mayor calidad).
+
+El captioning corre SIEMPRE en CPU (num_gpu=0) para evitar competencia de VRAM
+con los modelos de embedding/OCR que ya usan la GPU durante la ingesta.
+Configurable via SEEKPAL_VISION_MODEL (modelo) y SEEKPAL_VISION_NUM_GPU (gpu layers).
 
 Ambas piezas son lazy: solo se cargan/usan cuando hay imagenes que indexar.
 """
@@ -28,7 +32,8 @@ if TYPE_CHECKING:
     from rapidocr_onnxruntime import RapidOCR
 
 
-_MOONDREAM_MODEL = os.getenv("SEEKPAL_VISION_MODEL", "moondream")
+_VISION_MODEL = os.getenv("SEEKPAL_VISION_MODEL", "moondream")
+_VISION_NUM_GPU = int(os.getenv("SEEKPAL_VISION_NUM_GPU", "0"))  # 0 = CPU; evita OOM con embeddings en GPU
 _OLLAMA_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 _CAPTION_PROMPT = (
     "Describe esta imagen con un parrafo breve y concreto en espanol. "
@@ -183,13 +188,13 @@ def caption_image(path: Path) -> str:
     with _caption_lock:
         try:
             resp = client.chat(
-                model=_MOONDREAM_MODEL,
+                model=_VISION_MODEL,
                 messages=[{
                     "role": "user",
                     "content": _CAPTION_PROMPT,
                     "images": [str(path)],
                 }],
-                options={"temperature": 0.2, "num_ctx": 2048},
+                options={"temperature": 0.2, "num_ctx": 2048, "num_gpu": _VISION_NUM_GPU},
             )
             _caption_errors = 0
             return (resp.message.content or "").strip()
@@ -210,7 +215,7 @@ def caption_image(path: Path) -> str:
                 logger.warning(
                     "Modelo '%s' no descargado en Ollama ('ollama pull %s'). "
                     "Captioning desactivado para esta sesion.",
-                    _MOONDREAM_MODEL, _MOONDREAM_MODEL,
+                    _VISION_MODEL, _VISION_MODEL,
                 )
                 _caption.disable()
                 _caption_errors = 0
@@ -286,15 +291,15 @@ async def caption_image_async(path: Path) -> str:
         try:
             # AsyncClient creado por llamada (no cacheado) para evitar
             # "Event loop is closed" al reutilizar entre event loops distintos.
-            client = AsyncClient(host=_OLLAMA_URL, timeout=30.0)
+            client = AsyncClient(host=_OLLAMA_URL, timeout=90.0)
             resp = await client.chat(
-                model=_MOONDREAM_MODEL,
+                model=_VISION_MODEL,
                 messages=[{
                     "role": "user",
                     "content": _CAPTION_PROMPT,
                     "images": [str(path)],
                 }],
-                options={"temperature": 0.2, "num_ctx": 2048},
+                options={"temperature": 0.2, "num_ctx": 2048, "num_gpu": _VISION_NUM_GPU},
             )
             _caption_errors = 0
             return (resp.message.content or "").strip()
@@ -311,7 +316,7 @@ async def caption_image_async(path: Path) -> str:
                 logger.warning(
                     "Modelo '%s' no descargado en Ollama ('ollama pull %s'). "
                     "Captioning desactivado para esta sesion.",
-                    _MOONDREAM_MODEL, _MOONDREAM_MODEL,
+                    _VISION_MODEL, _VISION_MODEL,
                 )
                 _caption.disable()
                 _caption_errors = 0
