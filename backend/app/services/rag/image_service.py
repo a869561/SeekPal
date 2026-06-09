@@ -143,22 +143,27 @@ _register(_ocr)
 _register(_caption)
 
 
-def _to_png_bytes(path: Path) -> bytes:
-    """Normaliza cualquier imagen a PNG bytes antes de pasarla a Ollama.
+_FORMATS_NEEDING_CONVERSION = {".webp", ".avif", ".heic", ".heif"}
 
-    WEBP, AVIF, HEIC y otros formatos menos comunes crashean el model runner
-    de algunos modelos de visión en Ollama. Convertir a PNG (RGB) previamente
-    es más robusto y no añade latencia significativa.
+
+def _image_bytes_for_ollama(path: Path) -> bytes:
+    """Devuelve los bytes de imagen listos para Ollama.
+
+    JPG/PNG se pasan tal cual (sin re-encodear). WEBP, AVIF y HEIC se
+    convierten a PNG porque algunos modelos de visión en Ollama crashean
+    ("model runner unexpectedly stopped") al recibir estos formatos.
     """
-    try:
-        from PIL import Image
-        import io
-        with Image.open(path) as img:
-            buf = io.BytesIO()
-            img.convert("RGB").save(buf, format="PNG")
-            return buf.getvalue()
-    except Exception:
-        return path.read_bytes()  # fallback: pasar bytes crudos
+    if path.suffix.lower() in _FORMATS_NEEDING_CONVERSION:
+        try:
+            import io
+            from PIL import Image
+            with Image.open(path) as img:
+                buf = io.BytesIO()
+                img.convert("RGB").save(buf, format="PNG")
+                return buf.getvalue()
+        except Exception:
+            pass
+    return path.read_bytes()
 
 
 def ocr_image(path: Path) -> str:
@@ -210,7 +215,7 @@ def caption_image(path: Path) -> str:
                 messages=[{
                     "role": "user",
                     "content": _CAPTION_PROMPT,
-                    "images": [_to_png_bytes(path)],
+                    "images": [_image_bytes_for_ollama(path)],
                 }],
                 options={"temperature": 0.2, "num_ctx": 2048, "num_gpu": _VISION_NUM_GPU},
             )
@@ -316,7 +321,7 @@ async def caption_image_async(path: Path) -> str:
                 messages=[{
                     "role": "user",
                     "content": _CAPTION_PROMPT,
-                    "images": [_to_png_bytes(path)],
+                    "images": [_image_bytes_for_ollama(path)],
                 }],
                 options={"temperature": 0.2, "num_ctx": 2048, "num_gpu": _VISION_NUM_GPU},
             )
