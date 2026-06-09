@@ -85,6 +85,9 @@ export default function SourcesList({ sources, onDelete, onUpdate }) {
                 <div className="flex items-center gap-4 mt-2 text-xs text-slate-400 dark:text-slate-500">
                   <span>{t("sources.fileCount", { count: source.fileCount ?? 0 })}</span>
                   <span>{t("sources.lastIngest", { date: formatDate(source.lastIngested) })}</span>
+                  {formatDuration(source.lastIngestDurationSecs) && (
+                    <span>· {formatDuration(source.lastIngestDurationSecs)}</span>
+                  )}
                 </div>
                 {source.status === "done" && source.lastIngested && (
                   <div className="flex items-center gap-3 mt-1.5 text-xs">
@@ -99,11 +102,6 @@ export default function SourcesList({ sources, onDelete, onUpdate }) {
                       : "text-slate-400 dark:text-slate-500"}>
                       {t("sources.notIndexed", { count: source.failedCount ?? 0 })}
                     </span>
-                    {formatDuration(source.lastIngestDurationSecs) && (
-                      <span className="text-slate-400 dark:text-slate-500 ml-auto">
-                        {formatDuration(source.lastIngestDurationSecs)}
-                      </span>
-                    )}
                   </div>
                 )}
               </div>
