@@ -18,6 +18,13 @@ function formatDate(d) {
   return new Date(d).toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" });
 }
 
+function formatDuration(secs) {
+  if (!secs) return null;
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+
 export default function SourcesList({ sources, onDelete, onUpdate }) {
   const { t } = useTranslation();
   // Si al montar la lista ya hay una fuente en proceso (el usuario volvió a la
@@ -92,6 +99,11 @@ export default function SourcesList({ sources, onDelete, onUpdate }) {
                       : "text-slate-400 dark:text-slate-500"}>
                       {t("sources.notIndexed", { count: source.failedCount ?? 0 })}
                     </span>
+                    {formatDuration(source.lastIngestDurationSecs) && (
+                      <span className="text-slate-400 dark:text-slate-500 ml-auto">
+                        {formatDuration(source.lastIngestDurationSecs)}
+                      </span>
+                    )}
                   </div>
                 )}
               </div>

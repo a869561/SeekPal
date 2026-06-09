@@ -200,6 +200,7 @@ async def ingest_source(
         file_count = await FileDoc.find(FileDoc.sourceId == source_id).count()
         source.status = "done"
         source.lastIngested = datetime.now(UTC)
+        source.lastIngestDurationSecs = int(time.perf_counter() - t_ingest_start)
         source.fileCount = file_count
         if rag_stats is not None:
             source.indexedCount = rag_stats["indexed"]

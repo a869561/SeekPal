@@ -19,6 +19,7 @@ class Source(Document):
     path: str
     status: SourceStatus = "idle"
     lastIngested: datetime | None = None
+    lastIngestDurationSecs: int = 0
     fileCount: int = 0
     indexedCount: int = 0
     skippedCount: int = 0
