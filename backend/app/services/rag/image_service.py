@@ -143,6 +143,24 @@ _register(_ocr)
 _register(_caption)
 
 
+def _to_png_bytes(path: Path) -> bytes:
+    """Normaliza cualquier imagen a PNG bytes antes de pasarla a Ollama.
+
+    WEBP, AVIF, HEIC y otros formatos menos comunes crashean el model runner
+    de algunos modelos de visión en Ollama. Convertir a PNG (RGB) previamente
+    es más robusto y no añade latencia significativa.
+    """
+    try:
+        from PIL import Image
+        import io
+        with Image.open(path) as img:
+            buf = io.BytesIO()
+            img.convert("RGB").save(buf, format="PNG")
+            return buf.getvalue()
+    except Exception:
+        return path.read_bytes()  # fallback: pasar bytes crudos
+
+
 def ocr_image(path: Path) -> str:
     """Extrae texto de una imagen via OCR. Devuelve "" si no hay texto detectado.
 
@@ -192,7 +210,7 @@ def caption_image(path: Path) -> str:
                 messages=[{
                     "role": "user",
                     "content": _CAPTION_PROMPT,
-                    "images": [str(path)],
+                    "images": [_to_png_bytes(path)],
                 }],
                 options={"temperature": 0.2, "num_ctx": 2048, "num_gpu": _VISION_NUM_GPU},
             )
@@ -291,13 +309,14 @@ async def caption_image_async(path: Path) -> str:
         try:
             # AsyncClient creado por llamada (no cacheado) para evitar
             # "Event loop is closed" al reutilizar entre event loops distintos.
-            client = AsyncClient(host=_OLLAMA_URL, timeout=90.0)
+            # Timeout 150s > outer wait_for 120s, para que sea asyncio quien corte.
+            client = AsyncClient(host=_OLLAMA_URL, timeout=150.0)
             resp = await client.chat(
                 model=_VISION_MODEL,
                 messages=[{
                     "role": "user",
                     "content": _CAPTION_PROMPT,
-                    "images": [str(path)],
+                    "images": [_to_png_bytes(path)],
                 }],
                 options={"temperature": 0.2, "num_ctx": 2048, "num_gpu": _VISION_NUM_GPU},
             )
@@ -357,7 +376,7 @@ async def extract_image_text_async(path: Path) -> str:
     async def _caption_task() -> str:
         try:
             return await asyncio.wait_for(
-                caption_image_async(path), timeout=90.0,
+                caption_image_async(path), timeout=120.0,
             )
         except Exception:  # noqa: BLE001
             return ""
