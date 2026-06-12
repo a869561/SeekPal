@@ -257,7 +257,7 @@ class RerankerService:
     en CPU. Tamano: BAAI/bge-reranker-v2-m3 ~570 MB.
     """
 
-    def __init__(self, model: str) -> None:
+    def __init__(self, model: str, device: str = "auto") -> None:
         import warnings
         try:
             from fastembed.rerank.cross_encoder import TextCrossEncoder
@@ -268,10 +268,15 @@ class RerankerService:
                 raise RuntimeError(
                     f"FastEmbed no expone TextCrossEncoder en esta version: {exc}"
                 ) from exc
+        # device="cpu" fuerza el cross-encoder a CPU aunque haya GPU: en
+        # tarjetas de ~4 GB los pesos de embeddings+reranker saturan la VRAM
+        # y el rerank provoca OOM/thrashing; en CPU rinde parecido y deja la
+        # VRAM libre para el LLM de Ollama.
+        providers = ["CPUExecutionProvider"] if device == "cpu" else _PROVIDERS
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             try:
-                self._model = TextCrossEncoder(model_name=model, providers=_PROVIDERS)
+                self._model = TextCrossEncoder(model_name=model, providers=providers)
             except Exception:
                 self._model = TextCrossEncoder(model_name=model)
         self._model_name = model
@@ -283,9 +288,28 @@ class RerankerService:
         }.get(self.active_provider, self.active_provider)
         logger.info("FastEmbed reranker: %s -> %s", model, label)
 
+    # Pasajes por forward del cross-encoder. El batch interno de FastEmbed (64)
+    # dispara buffers de atencion de 3-4 GB y revienta GPUs de 4 GB (GTX 1650);
+    # 8 acota el pico a ~150-200 MB. Los scores son por par (query, pasaje),
+    # asi que trocear externamente no altera el resultado.
+    _RERANK_BATCH = 8
+
+    # Caracteres maximos de cada pasaje SOLO para puntuar (el texto completo
+    # sigue intacto para snippets y para el LLM). El coste del cross-encoder
+    # es ~lineal en tokens. Con chunks de 512 tokens (~2300 chars) hay que ser
+    # conservador: 1200 cortaba la senal de relevancia de chunks cuya mencion
+    # clave caia tarde ('propuesta TFG' pasaba de -0.04 a <-1.1 y se podaba);
+    # 2000 conserva ~85% del chunk y solo recorta colas anomalas.
+    _RERANK_MAX_CHARS = 2000
+
     def _rerank_sync(self, query: str, passages: list[str]) -> list[float]:
         # TextCrossEncoder.rerank devuelve un generador de floats en el mismo orden
-        return [float(s) for s in self._model.rerank(query, passages)]
+        truncated = [p[: self._RERANK_MAX_CHARS] for p in passages]
+        scores: list[float] = []
+        for i in range(0, len(truncated), self._RERANK_BATCH):
+            batch = truncated[i : i + self._RERANK_BATCH]
+            scores.extend(float(s) for s in self._model.rerank(query, batch))
+        return scores
 
     async def rerank(self, query: str, passages: list[str]) -> list[float]:
         if not passages:

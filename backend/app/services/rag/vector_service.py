@@ -20,7 +20,8 @@ from qdrant_client.http import models as qm
 
 from app.services.rag.types import RetrievedChunk
 
-_PREFETCH_MULTIPLIER = 4   # Prefetch top_k × 4 de cada rama antes de RRF
+_DENSE_PREFETCH_MULT  = 4  # Prefetch top_k × 4 para la rama densa (alta cobertura semántica)
+_SPARSE_PREFETCH_MULT = 2  # Prefetch top_k × 2 para BM25 (menos candidatos → menos ruido en docs cortos)
 
 
 class VectorService:
@@ -101,13 +102,14 @@ class VectorService:
     ) -> list[RetrievedChunk]:
         """Búsqueda híbrida dense+sparse con fusión RRF."""
         qf = _build_filter(filters) if filters else None
-        prefetch_limit = max(top_k * _PREFETCH_MULTIPLIER, 20)
+        dense_limit  = max(top_k * _DENSE_PREFETCH_MULT,  20)
+        sparse_limit = max(top_k * _SPARSE_PREFETCH_MULT, 20)
 
         response = self._client.query_points(
             collection_name=self._collection,
             prefetch=[
-                qm.Prefetch(query=dense_vector, using="dense", limit=prefetch_limit, filter=qf),
-                qm.Prefetch(query=sparse_vector, using="bm25",  limit=prefetch_limit, filter=qf),
+                qm.Prefetch(query=dense_vector, using="dense", limit=dense_limit,  filter=qf),
+                qm.Prefetch(query=sparse_vector, using="bm25",  limit=sparse_limit, filter=qf),
             ],
             query=qm.FusionQuery(fusion=qm.Fusion.RRF),
             limit=top_k,

@@ -51,8 +51,11 @@ Reformulaciones:"""
 
 
 def build_prompt(question: str, chunks: list[RetrievedChunk]) -> str:
+    # Incluir el nombre del fichero: a menudo lleva senal que no aparece en el
+    # texto (autor, grupo, fecha, tema) y sin el el LLM no puede ligar la
+    # pregunta con el documento (p.ej. "grupo 7-8" solo consta en el nombre).
     context = "\n".join(
-        f"[{i + 1}] (chunk_id={c.chunk_id}) {c.text}"
+        f"[{i + 1}] (chunk_id={c.chunk_id}, archivo={c.file_name}) {c.text}"
         for i, c in enumerate(chunks)
     )
     return _TEMPLATE.replace("<<<CONTEXT>>>", context).replace("<<<QUESTION>>>", question)

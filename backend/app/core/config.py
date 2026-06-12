@@ -31,15 +31,26 @@ class Settings(BaseSettings):
     # jina-reranker-v2 multilingue (~280 MB) como mejor alternativa.
     rag_reranker_enabled: bool = True
     rag_reranker_model: str = "jinaai/jina-reranker-v2-base-multilingual"
+    # Donde corre el cross-encoder: "auto" usa GPU si hay; "cpu" lo fuerza a
+    # CPU. En tarjetas de ~4 GB los pesos de embeddings+reranker llenan la
+    # VRAM y las activaciones del rerank provocan OOM o thrashing — ahi "cpu"
+    # rinde parecido (~0.5 s/pasaje), es estable y deja la VRAM para Ollama.
+    rag_reranker_device: str = "auto"
     # Multiplicador para sobre-recuperar candidatos antes del rerank.
     # Vector search devuelve top_k * multiplier y el reranker filtra a top_k.
-    rag_reranker_multiplier: int = 3
+    # 2 (no 3): el coste del rerank es lineal en candidatos y domina la
+    # latencia de cada query en GPUs modestas; el RRF ya ordena lo bastante
+    # bien como para que los relevantes esten en los primeros top_k*2.
+    rag_reranker_multiplier: int = 2
     # Suelo de relevancia: tras el rerank se descartan candidatos cuyo score
     # quede por debajo de este umbral, evitando alimentar al LLM con relleno
-    # irrelevante en queries sin buen match. jina-reranker-v2 emite logits
-    # (>=0 ~= relevante), asi que 0.0 es la frontera natural. Siempre se
-    # conserva al menos 1 resultado. Aplica solo cuando el reranker esta activo.
-    rag_reranker_min_score: float = 0.0
+    # irrelevante en queries sin buen match. Calibracion empirica con
+    # jina-reranker-v2 sobre corpus mixto ES/EN: documentos claramente
+    # relevantes puntuan entre -0.04 y +1.5 (queries españolas tienden a
+    # logits bajos), asi que 0.0 podaba resultados correctos ('propuesta TFG'
+    # perdia 1 de 2). -1.0 conserva esos y sigue cortando el relleno profundo.
+    # Siempre se conserva al menos 1 resultado. Solo aplica con reranker activo.
+    rag_reranker_min_score: float = -1.0
 
     # MMR (Maximum Marginal Relevance): tras retrieval+rerank, reordena el
     # top_k para diversificar — evita que sean todos del mismo fichero.

@@ -173,6 +173,7 @@ class RetrievalService:
         dense_vec: list[float],
         candidates: list[RetrievedChunk],
         top_k: int,
+        use_mmr: bool = True,
     ) -> list[RetrievedChunk]:
         """Aplica reranker (si disponible) y MMR sobre una lista de candidatos.
         Usado tanto por retrieve() como por retrieve_multi()."""
@@ -197,8 +198,11 @@ class RetrievalService:
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Reranker fallo, usando scores hybrid: %s", exc)
 
-        # MMR: diversifica top_k para evitar que sean todos del mismo fichero
-        if self._mmr_enabled and len(candidates) > top_k:
+        # MMR: diversifica top_k para evitar que sean todos del mismo fichero.
+        # use_mmr=False permite saltarlo en paths donde no aporta (búsqueda de
+        # ficheros, que ya agrupa por fichero): re-embeber todos los candidatos
+        # en cada query cuesta decenas de segundos en GPUs modestas.
+        if self._mmr_enabled and use_mmr and len(candidates) > top_k:
             # Reembebemos los textos de los candidatos para tener vectores
             # densos comparables con la query. Los vectores originales de
             # Qdrant no se devuelven en query_points (solo el payload).
@@ -218,6 +222,7 @@ class RetrievalService:
         top_k: int,
         source_id: str | None = None,
         categories: list[str] | None = None,
+        use_mmr: bool = True,
     ) -> list[RetrievedChunk]:
         # Sobre-recuperar para dar margen a reranker y/o MMR.
         candidate_k = top_k * self._reranker_multiplier if (self._reranker or self._mmr_enabled) else top_k
@@ -233,7 +238,7 @@ class RetrievalService:
             self._vector.search, dense_vec, sparse_vec, candidate_k, filters or None
         )
 
-        return await self._rerank_and_mmr(question, dense_vec, candidates, top_k)
+        return await self._rerank_and_mmr(question, dense_vec, candidates, top_k, use_mmr)
 
     async def retrieve_multi(
         self,

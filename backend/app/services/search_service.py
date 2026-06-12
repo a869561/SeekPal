@@ -19,9 +19,12 @@ from app.models.file import FileDoc
 _SPECIAL_REGEX = re.compile(r"[.*+?^${}()|\[\]\\]")
 
 # Cuántos chunks pedir a Qdrant antes de agrupar por fichero.
-# 80 chunks cubre sobradamente las 2-3 páginas típicas de resultados (15/pág)
-# sin sobrecargar el prefetch de RRF (que multiplica × 4 internamente).
-_CHUNK_LIMIT = 80
+# 20 cubre una página larga de resultados (15/pág) tras agrupar por fichero.
+# Subirlo encarece mucho más de lo que aparenta: el retrieval reranquea
+# top_k×2 pasajes con el cross-encoder (~0.5 s/pasaje en CPU), así que cada
+# +10 aquí son ~10 s más por búsqueda. Con 80 (→240 candidatos) el reranker
+# pedía >3 GB de VRAM de golpe (OOM en GPUs de 4 GB) y tardaba minutos.
+_CHUNK_LIMIT = 20
 
 
 async def search(
@@ -59,6 +62,9 @@ async def _semantic_search(
             top_k=_CHUNK_LIMIT,
             source_id=source_id or None,
             categories=[category] if category else None,
+            # Sin MMR: aquí se agrupa por fichero, la diversidad de chunks no
+            # aporta y re-embeber los candidatos duplica la latencia por query.
+            use_mmr=False,
         )
     except Exception:
         return await _filename_search(q, category, source_id, page, limit)

@@ -103,7 +103,10 @@ async def connect_database() -> None:
     reranker_enabled = runtime_settings.get("rerankerEnabled", settings.rag_reranker_enabled)
     if reranker_enabled:
         try:
-            _reranker_service = RerankerService(model=settings.rag_reranker_model)
+            _reranker_service = RerankerService(
+                model=settings.rag_reranker_model,
+                device=settings.rag_reranker_device,
+            )
         except Exception as exc:  # noqa: BLE001
             logger.warning("Reranker deshabilitado por error: %s", exc)
             _reranker_service = None
