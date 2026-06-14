@@ -36,6 +36,7 @@ const FIELD_DEFAULTS = {
   videoMaxFrames: 20,
   ocrQuality: "mobile",
   visionModel: "qwen2.5vl:3b",
+  autoFreePreviousVisionModel: false,
 };
 
 // Campos que requieren reiniciar el backend para entrar en efecto
@@ -323,6 +324,23 @@ export default function RagSettingsCard() {
             </option>
           ))}
         </select>
+
+        {/* Liberar el modelo anterior al cambiar (gestión de disco, opt-in) */}
+        <label className="flex items-start gap-2 mt-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={form.autoFreePreviousVisionModel ?? false}
+            disabled={busy}
+            onChange={(e) => update("autoFreePreviousVisionModel", e.target.checked)}
+            className="mt-0.5 accent-brand"
+          />
+          <span className="text-xs text-slate-600 dark:text-slate-300">
+            {t("ragSettings.autoFreeVision")}
+            <span className="block text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+              {t("ragSettings.autoFreeVisionHint")}
+            </span>
+          </span>
+        </label>
       </div>
 
       {/* Frame interval + max frames (solo si multimedia ON) */}

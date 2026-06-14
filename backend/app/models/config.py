@@ -38,6 +38,10 @@ class UserSettings(BaseModel):
     videoMaxFrames: int = Field(default=20, ge=1, le=500)
     ocrQuality: OcrQuality = "mobile"  # mobile=rápido (~15 MB) | server=preciso (~140 MB)
     visionModel: VisionModel = "qwen2.5vl:3b"  # qwen2.5vl:3b=mejor calidad (default) | moondream=más rápido
+    # Al cambiar de modelo de visión, desinstalar el anterior para ahorrar disco.
+    # Por defecto OFF: cambiar a menudo no debe re-descargar GB cada vez. Nunca
+    # toca el modelo de respaldo (moondream) ni el LLM activo.
+    autoFreePreviousVisionModel: bool = False
 
 
 class Config(Document):

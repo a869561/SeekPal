@@ -37,3 +37,17 @@ export const getDoclingStatus = () =>
 
 export const installDocling = () =>
   api.post("/system/install-docling").then((r) => r.data.data);
+
+// ── Gestión de modelos (panel "Modelos y almacenamiento") ──────────────────
+
+export const getModels = () =>
+  api.get("/system/models").then((r) => r.data.data);
+
+export const pullModel = (model) =>
+  api.post("/system/models/pull", { model }).then((r) => r.data.data);
+
+export const getModelPullStatus = () =>
+  api.get("/system/models/pull-status").then((r) => r.data.data);
+
+export const deleteModel = (model) =>
+  api.post("/system/models/delete", { model }).then((r) => r.data.data);

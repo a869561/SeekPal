@@ -31,6 +31,8 @@ _defaults: dict[str, Any] = {
     "videoMaxFrames": 20,
     "ocrQuality": "mobile",
     "visionModel": os.getenv("SEEKPAL_VISION_MODEL", "moondream"),
+    "autoFreePreviousVisionModel": False,
+    "visionModel": os.getenv("SEEKPAL_VISION_MODEL", "moondream"),
 }
 
 _settings: dict[str, Any] = dict(_defaults)

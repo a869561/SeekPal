@@ -23,3 +23,4 @@ class SettingsPatch(BaseModel):
     videoMaxFrames: int | None = Field(default=None, ge=1, le=500)
     ocrQuality: OcrQuality | None = None
     visionModel: VisionModel | None = None
+    autoFreePreviousVisionModel: bool | None = None

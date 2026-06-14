@@ -401,3 +401,178 @@ async def switch_provider(target: str) -> None:
 def restart_app() -> None:
     """Reinicia SeekPal vía exit code 99 (start.bat lo detecta y relanza)."""
     asyncio.get_running_loop().call_later(_RESTART_DELAY_S, lambda: os._exit(99))
+
+
+# ---------------------------------------------------------------------------
+# Gestión de modelos de Ollama (panel "Modelos y almacenamiento")
+# ---------------------------------------------------------------------------
+
+_OLLAMA_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+
+# Modelo de respaldo que nunca se desinstala (más ligero, siempre disponible).
+_FALLBACK_VISION_MODEL = "moondream"
+
+# Catálogo de modelos conocidos: aparecen en el panel aunque no estén instalados.
+_MODEL_CATALOG: list[dict] = [
+    {"id": "qwen2.5vl:3b", "category": "vision", "label": "Visión · calidad"},
+    {"id": "moondream",    "category": "vision", "label": "Visión · ligero (respaldo)"},
+    {"id": "qwen3:4b",     "category": "llm",    "label": "LLM (respuestas)"},
+]
+
+# Estado de la descarga en curso (patrón análogo a get_install_status).
+_pull_status: dict = {"status": "idle", "model": None, "error": None}
+
+
+def _norm_model(name: str) -> str:
+    """Normaliza el nombre de un modelo Ollama quitando el sufijo ':latest'."""
+    return name[:-7] if name.endswith(":latest") else name
+
+
+def _ollama_client():
+    from ollama import Client
+    return Client(host=_OLLAMA_URL)
+
+
+def _installed_models() -> dict[str, tuple[str, int | None]]:
+    """{nombre_normalizado: (nombre_real, tamaño_bytes)} de lo instalado en Ollama.
+
+    Devuelve {} si Ollama no está disponible (todo se mostrará como no instalado).
+    Tolera las distintas formas de respuesta de la librería ollama (objeto/dict)."""
+    out: dict[str, tuple[str, int | None]] = {}
+    try:
+        resp = _ollama_client().list()
+        models = getattr(resp, "models", None)
+        if models is None and isinstance(resp, dict):
+            models = resp.get("models", [])
+        for m in models or []:
+            real = getattr(m, "model", None) or getattr(m, "name", None)
+            size = getattr(m, "size", None)
+            if real is None and isinstance(m, dict):
+                real = m.get("model") or m.get("name")
+                size = m.get("size")
+            if isinstance(size, (int, float)):
+                size = int(size)
+            elif size is not None:
+                size = getattr(size, "real", None) or None
+            if real:
+                out[_norm_model(real)] = (real, size)
+    except Exception:
+        pass
+    return out
+
+
+def _active_model_norms() -> set[str]:
+    from app.core import runtime_settings
+    from app.core.config import settings
+    active = {_norm_model(settings.llm_model)}
+    vm = runtime_settings.get("visionModel")
+    if vm:
+        active.add(_norm_model(vm))
+    return active
+
+
+def list_models() -> list[dict]:
+    """Catálogo de modelos para el panel: instalados y no instalados.
+
+    Cada item: {id, category, label, sizeBytes, installed, active, protected, deletable}.
+    Orden: instalados primero, luego no instalados. Protegidos = activo o respaldo."""
+    installed = _installed_models()
+    active = _active_model_norms()
+    fallback = _norm_model(_FALLBACK_VISION_MODEL)
+
+    out: list[dict] = []
+    seen: set[str] = set()
+    for entry in _MODEL_CATALOG:
+        nid = _norm_model(entry["id"])
+        seen.add(nid)
+        real, size = installed.get(nid, (None, None))
+        is_inst = real is not None
+        is_active = nid in active
+        protected = is_active or nid == fallback
+        out.append({
+            "id": entry["id"],
+            "category": entry["category"],
+            "label": entry["label"],
+            "sizeBytes": size,
+            "installed": is_inst,
+            "active": is_active,
+            "protected": protected,
+            "deletable": is_inst and not protected,
+        })
+
+    # Modelos instalados que no están en el catálogo (restos: bge-m3, llama3.2…).
+    for nid, (real, size) in installed.items():
+        if nid in seen:
+            continue
+        is_active = nid in active
+        protected = is_active or nid == fallback
+        out.append({
+            "id": real,
+            "category": "otro",
+            "label": real,
+            "sizeBytes": size,
+            "installed": True,
+            "active": is_active,
+            "protected": protected,
+            "deletable": not protected,
+        })
+
+    out.sort(key=lambda x: (not x["installed"], x["category"], x["label"]))
+    return out
+
+
+def delete_model(model_id: str) -> dict:
+    """Desinstala un modelo de Ollama. Rechaza los protegidos (activo o respaldo)."""
+    match = next(
+        (m for m in list_models() if m["id"] == model_id or _norm_model(m["id"]) == _norm_model(model_id)),
+        None,
+    )
+    if match is None or not match["installed"]:
+        raise ValueError("El modelo no está instalado")
+    if not match["deletable"]:
+        raise ValueError("Modelo en uso o de respaldo: no se puede eliminar")
+    _ollama_client().delete(match["id"])
+    return {"deleted": match["id"]}
+
+
+def free_vision_model(model_id: str) -> None:
+    """Borra un modelo de visión que se deja de usar (toggle auto-liberar).
+
+    Se llama al cambiar visionModel, ANTES del reinicio, así que no se apoya en el
+    check de 'active' de runtime_settings (aún apunta al modelo viejo). Protege el
+    respaldo (moondream) y el LLM activo. Fallo no crítico."""
+    from app.core.config import settings
+    protected = {_norm_model(_FALLBACK_VISION_MODEL), _norm_model(settings.llm_model)}
+    if _norm_model(model_id) in protected:
+        return
+    try:
+        _ollama_client().delete(model_id)
+    except Exception:
+        pass
+
+
+def get_pull_status() -> dict:
+    return dict(_pull_status)
+
+
+def _pull_sync(model_id: str) -> None:
+    _ollama_client().pull(model_id)
+
+
+async def pull_model(model_id: str) -> None:
+    """Descarga un modelo de Ollama en background, publicando el estado."""
+    global _pull_status
+    _pull_status = {"status": "pulling", "model": model_id, "error": None}
+    try:
+        await asyncio.to_thread(_pull_sync, model_id)
+        _pull_status = {"status": "done", "model": model_id, "error": None}
+    except Exception as exc:  # noqa: BLE001
+        _pull_status = {"status": "error", "model": model_id, "error": str(exc)}
+
+
+def is_known_model(model_id: str) -> bool:
+    """True si el modelo está en el catálogo o ya instalado (evita pulls arbitrarios)."""
+    return any(
+        m["id"] == model_id or _norm_model(m["id"]) == _norm_model(model_id)
+        for m in list_models()
+    )

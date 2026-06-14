@@ -18,8 +18,25 @@ async def get_settings():
 async def update_settings(patch: SettingsPatch):
     config = await get_or_create_config()
     data = patch.model_dump(exclude_unset=True)
+    old_vision = config.settings.visionModel
     for key, value in data.items():
         if value is not None:
             setattr(config.settings, key, value)
     await config.save()
+
+    # Auto-liberar el modelo de visión anterior si el usuario activó el toggle.
+    # Se hace tras guardar y antes del reinicio que dispara el frontend; el
+    # helper protege el respaldo (moondream) y el LLM activo. Fallo no crítico.
+    if (
+        config.settings.autoFreePreviousVisionModel
+        and "visionModel" in data
+        and old_vision
+        and old_vision != config.settings.visionModel
+    ):
+        try:
+            from app.services import system_service
+            system_service.free_vision_model(old_vision)
+        except Exception:
+            pass
+
     return ok(config.settings.model_dump())

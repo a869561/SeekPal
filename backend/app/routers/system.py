@@ -11,6 +11,10 @@ class SetProviderRequest(BaseModel):
     provider: str  # auto | cpu | cuda | directml
 
 
+class ModelActionRequest(BaseModel):
+    model: str
+
+
 router = APIRouter(prefix="/api/system", tags=["system"], dependencies=[Depends(require_auth)])
 
 
@@ -178,3 +182,38 @@ async def restart(force: bool = False):
 
     system_service.restart_app()
     return ok({"status": "restarting"})
+
+
+# ── Gestión de modelos (panel "Modelos y almacenamiento") ──────────────────
+
+@router.get("/models")
+async def list_models():
+    """Catálogo de modelos (instalados y no) con tamaño, estado activo y si son
+    eliminables. Los protegidos (modelo activo o de respaldo) no se pueden borrar."""
+    return ok(system_service.list_models())
+
+
+@router.post("/models/pull")
+async def pull_model(body: ModelActionRequest, background_tasks: BackgroundTasks):
+    """Descarga un modelo del catálogo en background. Sondear /models/pull-status."""
+    if not system_service.is_known_model(body.model):
+        raise APIError(f"Modelo no reconocido: {body.model}", status_code=400)
+    if system_service.get_pull_status()["status"] == "pulling":
+        raise APIError("Ya hay una descarga en progreso", status_code=409)
+    background_tasks.add_task(system_service.pull_model, body.model)
+    return ok({"status": "pulling", "model": body.model})
+
+
+@router.get("/models/pull-status")
+async def pull_status():
+    return ok(system_service.get_pull_status())
+
+
+@router.post("/models/delete")
+async def delete_model(body: ModelActionRequest):
+    """Desinstala un modelo. Rechaza con 409 los protegidos (activo o respaldo)."""
+    try:
+        result = system_service.delete_model(body.model)
+    except ValueError as exc:
+        raise APIError(str(exc), status_code=409) from exc
+    return ok(result)
