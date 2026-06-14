@@ -40,6 +40,9 @@
     "protectedHint": "Model in use or fallback, cannot be removed",
     "catVision":     "Image description",
     "catLlm":        "Answers (LLM)",
+    "catAudio":      "Audio transcription",
+    "catOcr":        "OCR (text in images)",
+    "catPdf":        "Structured PDFs",
     "catOther":      "Other / unused"
   },
   "ragSettings": {
@@ -71,7 +74,8 @@
     "saving":               "Saving...",
     "restarting":           "Restarting...",
     "done":                 "Settings applied",
-    "error":                "Error saving settings"
+    "error":                "Error saving settings",
+    "ingestPending":        "Saved. Will apply when the current ingestion finishes (not restarting so it isn't interrupted)."
   },
   "hardware": {
     "title":          "Detected components",

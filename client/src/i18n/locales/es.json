@@ -40,6 +40,9 @@
     "protectedHint": "Modelo en uso o de respaldo, no se puede eliminar",
     "catVision":     "Descripción de imágenes",
     "catLlm":        "Respuestas (LLM)",
+    "catAudio":      "Transcripción de audio",
+    "catOcr":        "OCR (texto en imágenes)",
+    "catPdf":        "PDFs estructurados",
     "catOther":      "Otro / sin usar"
   },
   "ragSettings": {
@@ -71,7 +74,8 @@
     "saving":               "Guardando…",
     "restarting":           "Reiniciando…",
     "done":                 "Ajustes aplicados",
-    "error":                "Error al guardar los ajustes"
+    "error":                "Error al guardar los ajustes",
+    "ingestPending":        "Guardado. Se aplicará al terminar la ingesta en curso (no se reinicia para no cortarla)."
   },
   "hardware": {
     "title":          "Componentes detectados",

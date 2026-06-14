@@ -129,7 +129,21 @@ export default function RagSettingsCard() {
       if (needsRestart) {
         setState("restarting");
         invalidateHardwareCache();
-        try { await restartApp(false); } catch { /* ignore */ }
+        try {
+          await restartApp(false);
+        } catch (err) {
+          // 409 = hay una ingesta en curso. Los ajustes quedan guardados en
+          // Mongo y se aplicarán al reiniciar; NO forzamos el reinicio para no
+          // cortar la ingesta. Avisamos al usuario en vez de fingir "aplicado".
+          if (err?.response?.status === 409) {
+            setOriginal({ ...original, ...patch });
+            setForm({ ...original, ...patch });
+            setState("ingestPending");
+            setTimeout(() => setState("idle"), 6000);
+            return;
+          }
+          // Otros errores: caemos al flujo normal (waitForRestart reintenta).
+        }
         await waitForRestart();
         setState("done");
         const fresh = await getSettings();
@@ -423,6 +437,11 @@ export default function RagSettingsCard() {
       {state === "done" && (
         <div className="flex items-center gap-2 text-sm text-success">
           <CheckCircle size={15} /> {t("ragSettings.done")}
+        </div>
+      )}
+      {state === "ingestPending" && (
+        <div className="flex items-start gap-2 text-sm text-warning">
+          <AlertCircle size={15} className="mt-0.5 shrink-0" /> {t("ragSettings.ingestPending")}
         </div>
       )}
       {state === "error" && (

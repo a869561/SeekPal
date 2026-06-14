@@ -69,6 +69,15 @@ def cleanup_ingest(source_id: str) -> None:
     _pause_events.pop(source_id, None)
 
 
+def is_ingesting() -> bool:
+    """True si hay alguna ingesta activa o pausada.
+
+    _pause_events tiene una entrada por ingesta viva (cleanup_ingest la elimina al
+    terminar). Se usa para bloquear operaciones destructivas (borrar modelos,
+    auto-liberar el anterior) mientras una ingesta podría estar usando el modelo."""
+    return bool(_pause_events)
+
+
 def _is_hidden(name: str) -> bool:
     return name.startswith(".") or name.startswith("$")
 

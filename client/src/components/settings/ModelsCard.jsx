@@ -13,6 +13,9 @@ function formatSize(bytes) {
 const CATEGORY_KEY = {
   vision: "modelsCard.catVision",
   llm: "modelsCard.catLlm",
+  audio: "modelsCard.catAudio",
+  ocr: "modelsCard.catOcr",
+  pdf: "modelsCard.catPdf",
   otro: "modelsCard.catOther",
 };
 
@@ -111,7 +114,7 @@ export default function ModelsCard() {
               </div>
               <div className="text-[11px] text-slate-400 dark:text-slate-500">
                 {t(CATEGORY_KEY[m.category] || "modelsCard.catOther")}
-                {m.installed && m.sizeBytes ? ` · ${formatSize(m.sizeBytes)}` : ""}
+                {m.sizeBytes ? ` · ${m.installed ? "" : "~"}${formatSize(m.sizeBytes)}` : ""}
               </div>
             </div>
 

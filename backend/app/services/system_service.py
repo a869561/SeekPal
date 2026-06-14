@@ -471,11 +471,128 @@ def _active_model_norms() -> set[str]:
     return active
 
 
+# ── Whisper (faster-whisper) — modelos en la caché de HuggingFace ──────────
+_WHISPER_SIZES = ["tiny", "base", "small", "medium"]
+_WHISPER_SIZE_HINT = {  # tamaño aprox. para mostrar antes de instalar
+    "tiny": 75_000_000, "base": 145_000_000, "small": 488_000_000, "medium": 1_530_000_000,
+}
+
+
+def _whisper_cache() -> dict[str, int]:
+    """{size: bytes_en_disco} de los modelos faster-whisper en la caché de HF."""
+    out: dict[str, int] = {}
+    try:
+        from huggingface_hub import scan_cache_dir
+        for repo in scan_cache_dir().repos:
+            rid = repo.repo_id.lower()
+            for size in _WHISPER_SIZES:
+                if rid.endswith(f"faster-whisper-{size}"):
+                    out[size] = int(repo.size_on_disk)
+    except Exception:
+        pass
+    return out
+
+
+def _whisper_delete(size: str) -> None:
+    from huggingface_hub import scan_cache_dir
+    info = scan_cache_dir()
+    revs = [
+        rev.commit_hash
+        for repo in info.repos if repo.repo_id.lower().endswith(f"faster-whisper-{size}")
+        for rev in repo.revisions
+    ]
+    if revs:
+        info.delete_revisions(*revs).execute()
+
+
+def _whisper_models() -> list[dict]:
+    from app.core import runtime_settings
+    installed = _whisper_cache()
+    active = runtime_settings.get("whisperModel", "small")
+    out = []
+    for size in _WHISPER_SIZES:
+        is_inst = size in installed
+        is_active = size == active
+        out.append({
+            "id": f"whisper:{size}", "manager": "whisper", "category": "audio",
+            "label": f"Audio · {size}",
+            "sizeBytes": installed.get(size) if is_inst else _WHISPER_SIZE_HINT[size],
+            "installed": is_inst, "active": is_active,
+            "protected": is_active, "deletable": is_inst and not is_active,
+        })
+    return out
+
+
+# ── OCR (rapidocr) — modelos onnx en el paquete ────────────────────────────
+_OCR_SERVER_FILES = ["ch_PP-OCRv4_det_server.onnx", "ch_PP-OCRv4_rec_server.onnx"]
+
+
+def _ocr_models_dir() -> Path | None:
+    import importlib.util
+    for pkg in ("rapidocr_onnxruntime", "rapidocr"):
+        try:
+            spec = importlib.util.find_spec(pkg)
+        except Exception:
+            spec = None
+        if spec and spec.origin:
+            return Path(spec.origin).parent / "models"
+    return None
+
+
+def _ocr_delete_server() -> None:
+    mdir = _ocr_models_dir()
+    if not mdir:
+        return
+    for f in _OCR_SERVER_FILES:
+        p = mdir / f
+        if p.exists():
+            p.unlink()
+
+
+def _ocr_models() -> list[dict]:
+    from app.core import runtime_settings
+    active = runtime_settings.get("ocrQuality", "mobile")
+    mdir = _ocr_models_dir()
+    server_paths = [mdir / f for f in _OCR_SERVER_FILES] if mdir else []
+    server_inst = bool(server_paths) and all(p.exists() for p in server_paths)
+    server_size = sum(p.stat().st_size for p in server_paths if p.exists()) if server_inst else 140_000_000
+    return [
+        {"id": "ocr:mobile", "manager": "ocr", "category": "ocr", "label": "OCR · rápido (incluido)",
+         "sizeBytes": None, "installed": True, "active": active == "mobile",
+         "protected": True, "deletable": False},
+        {"id": "ocr:server", "manager": "ocr", "category": "ocr", "label": "OCR · preciso",
+         "sizeBytes": server_size, "installed": server_inst, "active": active == "server",
+         "protected": active == "server", "deletable": server_inst and active != "server"},
+    ]
+
+
+# ── Docling — paquete pip (~2 GB) ──────────────────────────────────────────
+def _docling_models() -> list[dict]:
+    from app.core import runtime_settings
+    inst = is_docling_installed()
+    active = bool(runtime_settings.get("useDocling", False))
+    return [{
+        "id": "docling", "manager": "docling", "category": "pdf",
+        "label": "PDFs estructurados (Docling)",
+        "sizeBytes": 2_000_000_000,  # ~2 GB (torch + transformers + modelos), estimado
+        "installed": inst, "active": active,
+        "protected": active, "deletable": inst and not active,
+    }]
+
+
+def _find_item(model_id: str) -> dict | None:
+    return next(
+        (m for m in list_models() if m["id"] == model_id or _norm_model(m["id"]) == _norm_model(model_id)),
+        None,
+    )
+
+
 def list_models() -> list[dict]:
     """Catálogo de modelos para el panel: instalados y no instalados.
 
-    Cada item: {id, category, label, sizeBytes, installed, active, protected, deletable}.
-    Orden: instalados primero, luego no instalados. Protegidos = activo o respaldo."""
+    Cada item: {id, manager, category, label, sizeBytes, installed, active, protected, deletable}.
+    Cubre Ollama (LLM/visión), Whisper (audio), OCR y Docling. Orden: instalados
+    primero. Protegidos = modelo activo o de respaldo (no se pueden eliminar)."""
     installed = _installed_models()
     active = _active_model_norms()
     fallback = _norm_model(_FALLBACK_VISION_MODEL)
@@ -491,6 +608,7 @@ def list_models() -> list[dict]:
         protected = is_active or nid == fallback
         out.append({
             "id": entry["id"],
+            "manager": "ollama",
             "category": entry["category"],
             "label": entry["label"],
             "sizeBytes": size,
@@ -508,6 +626,7 @@ def list_models() -> list[dict]:
         protected = is_active or nid == fallback
         out.append({
             "id": real,
+            "manager": "ollama",
             "category": "otro",
             "label": real,
             "sizeBytes": size,
@@ -517,22 +636,38 @@ def list_models() -> list[dict]:
             "deletable": not protected,
         })
 
+    out.extend(_whisper_models())
+    out.extend(_ocr_models())
+    out.extend(_docling_models())
+
+    # Orden: instalados primero; dentro, por categoría y etiqueta.
     out.sort(key=lambda x: (not x["installed"], x["category"], x["label"]))
     return out
 
 
 def delete_model(model_id: str) -> dict:
-    """Desinstala un modelo de Ollama. Rechaza los protegidos (activo o respaldo)."""
-    match = next(
-        (m for m in list_models() if m["id"] == model_id or _norm_model(m["id"]) == _norm_model(model_id)),
-        None,
-    )
-    if match is None or not match["installed"]:
+    """Desinstala un modelo (cualquier manager). Rechaza los protegidos (activo o
+    respaldo) y si hay una ingesta en curso (podría estar usándolo)."""
+    from app.services import scanner_service
+    if scanner_service.is_ingesting():
+        raise ValueError("No se puede eliminar un modelo mientras hay una ingesta en curso")
+    item = _find_item(model_id)
+    if item is None or not item["installed"]:
         raise ValueError("El modelo no está instalado")
-    if not match["deletable"]:
+    if not item["deletable"]:
         raise ValueError("Modelo en uso o de respaldo: no se puede eliminar")
-    _ollama_client().delete(match["id"])
-    return {"deleted": match["id"]}
+    mgr = item["manager"]
+    if mgr == "ollama":
+        _ollama_client().delete(item["id"])
+    elif mgr == "whisper":
+        _whisper_delete(item["id"].split(":", 1)[1])
+    elif mgr == "ocr":
+        _ocr_delete_server()
+    elif mgr == "docling":
+        _pip_uninstall_sync(["docling"])
+    else:
+        raise ValueError("Este modelo no se puede eliminar")
+    return {"deleted": item["id"]}
 
 
 def free_vision_model(model_id: str) -> None:
@@ -542,6 +677,11 @@ def free_vision_model(model_id: str) -> None:
     check de 'active' de runtime_settings (aún apunta al modelo viejo). Protege el
     respaldo (moondream) y el LLM activo. Fallo no crítico."""
     from app.core.config import settings
+    from app.services import scanner_service
+    # Nunca borrar durante una ingesta: el captioning podría estar usando el
+    # modelo anterior justo ahora (el cambio de modelo solo se aplica al reiniciar).
+    if scanner_service.is_ingesting():
+        return
     protected = {_norm_model(_FALLBACK_VISION_MODEL), _norm_model(settings.llm_model)}
     if _norm_model(model_id) in protected:
         return
@@ -555,16 +695,33 @@ def get_pull_status() -> dict:
     return dict(_pull_status)
 
 
-def _pull_sync(model_id: str) -> None:
-    _ollama_client().pull(model_id)
+def _install_sync(item: dict) -> None:
+    mgr = item["manager"]
+    if mgr == "ollama":
+        _ollama_client().pull(item["id"])
+    elif mgr == "whisper":
+        from huggingface_hub import snapshot_download
+        size = item["id"].split(":", 1)[1]
+        snapshot_download(f"Systran/faster-whisper-{size}")
+    elif mgr == "ocr":
+        from app.services.rag.image_service import _ensure_server_models
+        _ensure_server_models()
+    elif mgr == "docling":
+        _pip_install_sync(["docling"])
+    else:
+        raise ValueError(f"No se sabe instalar el modelo: {item['id']}")
 
 
 async def pull_model(model_id: str) -> None:
-    """Descarga un modelo de Ollama en background, publicando el estado."""
+    """Descarga/instala un modelo (cualquier manager) en background."""
     global _pull_status
+    item = _find_item(model_id)
+    if item is None:
+        _pull_status = {"status": "error", "model": model_id, "error": "Modelo desconocido"}
+        return
     _pull_status = {"status": "pulling", "model": model_id, "error": None}
     try:
-        await asyncio.to_thread(_pull_sync, model_id)
+        await asyncio.to_thread(_install_sync, item)
         _pull_status = {"status": "done", "model": model_id, "error": None}
     except Exception as exc:  # noqa: BLE001
         _pull_status = {"status": "error", "model": model_id, "error": str(exc)}
