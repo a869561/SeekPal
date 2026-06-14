@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Trash2, PlayCircle, Clock, CheckCircle, AlertCircle, Loader, RefreshCw, Brain } from "lucide-react";
+import { Trash2, Play, Clock, CheckCircle, AlertCircle, Loader, RefreshCw, Scan, Brain } from "lucide-react";
 import IngestionProgress from "./IngestionProgress.jsx";
 import Button from "../ui/Button.jsx";
 import { toggleAutoIndex } from "../../api/sources.js";
@@ -32,6 +32,7 @@ export default function SourcesList({ sources, onDelete, onUpdate }) {
   const [ingesting, setIngesting] = useState(
     () => sources.find((s) => s.status === "scanning")?._id ?? null
   );
+  const [ingestForce, setIngestForce] = useState(true);
   const [togglingId, setTogglingId] = useState(null);
 
   const STATUS_CONFIG = {
@@ -82,28 +83,20 @@ export default function SourcesList({ sources, onDelete, onUpdate }) {
                   </span>
                 </div>
                 <p className="text-slate-400 dark:text-slate-500 text-xs font-mono truncate">{source.path}</p>
-                <div className="flex items-center gap-4 mt-2 text-xs text-slate-400 dark:text-slate-500">
+                <div className="flex items-center gap-3 mt-2 text-xs text-slate-400 dark:text-slate-500 flex-wrap">
                   <span>{t("sources.fileCount", { count: source.fileCount ?? 0 })}</span>
-                  <span>{t("sources.lastIngest", { date: formatDate(source.lastIngested) })}</span>
-                  {formatDuration(source.lastIngestDurationSecs) && (
-                    <span>· {formatDuration(source.lastIngestDurationSecs)}</span>
+                  {source.lastIngested && (
+                    <span>
+                      {t("sources.lastIngest", { date: formatDate(source.lastIngested) })}
+                      {formatDuration(source.lastIngestDurationSecs) && ` · ${formatDuration(source.lastIngestDurationSecs)}`}
+                    </span>
                   )}
+                  {source.lastIngested && (<>
+                    <span className="text-success font-medium">{t("sources.indexed", { count: source.indexedCount ?? 0 })}</span>
+                    <span>{t("sources.empty", { count: source.skippedCount ?? 0 })}</span>
+                    <span className={(source.failedCount ?? 0) > 0 ? "text-danger font-medium" : ""}>{t("sources.notIndexed", { count: source.failedCount ?? 0 })}</span>
+                  </>)}
                 </div>
-                {source.status === "done" && source.lastIngested && (
-                  <div className="flex items-center gap-3 mt-1.5 text-xs">
-                    <span className="text-success font-medium">
-                      {t("sources.indexed", { count: source.indexedCount ?? 0 })}
-                    </span>
-                    <span className="text-slate-400 dark:text-slate-500">
-                      {t("sources.empty", { count: source.skippedCount ?? 0 })}
-                    </span>
-                    <span className={(source.failedCount ?? 0) > 0
-                      ? "text-danger font-medium"
-                      : "text-slate-400 dark:text-slate-500"}>
-                      {t("sources.notIndexed", { count: source.failedCount ?? 0 })}
-                    </span>
-                  </div>
-                )}
               </div>
 
               <div className="flex items-center gap-2 flex-shrink-0">
@@ -118,12 +111,23 @@ export default function SourcesList({ sources, onDelete, onUpdate }) {
                 </Button>
 
                 <Button
-                  variant="brand"
-                  onClick={() => setIngesting(source._id)}
+                  variant="neutral"
+                  onClick={() => { setIngestForce(false); setIngesting(source._id); }}
                   disabled={isIngesting || source.status === "scanning"}
+                  title={t("sources.updateTooltip")}
                 >
-                  <PlayCircle size={14} />
-                  {t("sources.ingest")}
+                  <Scan size={14} />
+                  {t("sources.update")}
+                </Button>
+
+                <Button
+                  variant="brand"
+                  onClick={() => { setIngestForce(true); setIngesting(source._id); }}
+                  disabled={isIngesting || source.status === "scanning"}
+                  title={t("sources.ingestAllTooltip")}
+                >
+                  <Play size={14} />
+                  {t("sources.ingestAll")}
                 </Button>
 
                 <Button
@@ -141,6 +145,7 @@ export default function SourcesList({ sources, onDelete, onUpdate }) {
             {isIngesting && (
               <IngestionProgress
                 sourceId={source._id}
+                force={ingestForce}
                 onDone={(updated) => { setIngesting(null); onUpdate(updated); }}
               />
             )}

@@ -4,7 +4,7 @@ Combina dos pipelines complementarios:
   - OCR: extrae texto incrustado (screenshots, scans, pizarras con escritura).
   - Captioning: descripcion en lenguaje natural de la escena (gente, objetos,
     composicion). Usa un modelo de vision via Ollama (por defecto moondream;
-    recomendado qwen2.5-vl:3b para mayor calidad).
+    recomendado qwen2.5vl:3b para mayor calidad).
 
 El captioning corre SIEMPRE en CPU (num_gpu=0) para evitar competencia de VRAM
 con los modelos de embedding/OCR que ya usan la GPU durante la ingesta.
@@ -32,13 +32,36 @@ if TYPE_CHECKING:
     from rapidocr_onnxruntime import RapidOCR
 
 
-_VISION_MODEL = os.getenv("SEEKPAL_VISION_MODEL", "moondream")
 _VISION_NUM_GPU = int(os.getenv("SEEKPAL_VISION_NUM_GPU", "0"))  # 0 = CPU; evita OOM con embeddings en GPU
+
+
+def _vision_model() -> str:
+    """Devuelve el modelo de visión activo, resuelto en tiempo de llamada.
+
+    Lee runtime_settings (que refleja el valor guardado en Mongo por el usuario)
+    con fallback a la variable de entorno SEEKPAL_VISION_MODEL.
+    El cambio entra en efecto tras reinicio (igual que el resto de settings RAG).
+    """
+    from app.core import runtime_settings  # import local para evitar ciclos en arranque
+    return runtime_settings.get("visionModel") or os.getenv("SEEKPAL_VISION_MODEL", "moondream")
 _OLLAMA_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+# Prompt en prosa (sin listas numeradas) con instrucción anti-eco: los modelos
+# pequeños (p.ej. moondream) tienden a repetir prompts estructurados en vez de
+# describir. Validado empíricamente con qwen2.5vl:3b: produce captions ricos en
+# español que nombran marcas/nombres propios sin repetir las instrucciones.
 _CAPTION_PROMPT = (
-    "Describe esta imagen con un parrafo breve y concreto en espanol. "
-    "Menciona los objetos principales, personas, texto visible, escenario "
-    "y cualquier dato util para buscarla mas tarde."
+    "Describe directamente lo que ves en esta imagen, en español, en 2 a 4 frases "
+    "dentro de un solo párrafo. Incluye el tipo de imagen, los objetos y personas, "
+    "cualquier texto, marca, logo o nombre propio visible, el escenario y términos "
+    "útiles para buscarla. No repitas ni menciones estas instrucciones."
+)
+_CAPTION_PROMPT_RETRY = (
+    "Describe esta imagen con detalle: colores, formas, objetos, "
+    "personas, escenario y cualquier elemento visible. Siempre hay algo que describir, "
+    "nunca dejes la respuesta vacia."
+)
+_CAPTION_PROMPT_FRAME = (
+    "En una frase, describe brevemente lo que muestra este fotograma de vídeo."
 )
 
 
@@ -189,12 +212,17 @@ def ocr_image(path: Path) -> str:
         return ""
 
 
-def caption_image(path: Path) -> str:
+def caption_image(path: Path, brief: bool = False) -> str:
     """Genera descripcion en lenguaje natural via Moondream/Ollama.
 
     Sincrono: se invoca desde extractores que corren en threads worker. Usa el
     Client sincrono de ollama para evitar el "Event loop is closed" que daba el
     AsyncClient cacheado entre loops creados por asyncio.run().
+
+    brief=True: usa un prompt corto de una frase y num_predict=96. Pensado
+    para frames de vídeo (numerosos) donde la cota baja de generación reduce
+    el coste total sin perder la señal principal del fotograma.
+    brief=False (defecto): prompt rico acotado a 220 tokens de salida.
 
     Politica de fallos:
     - Ollama ocupado/timeout (fallo TEMPORAL): se omite esta imagen sin
@@ -208,16 +236,19 @@ def caption_image(path: Path) -> str:
     client = _caption.get()
     if client is None:
         return ""
+    prompt = _CAPTION_PROMPT_FRAME if brief else _CAPTION_PROMPT
+    num_predict = 96 if brief else 220
+    model = _vision_model()
     with _caption_lock:
         try:
             resp = client.chat(
-                model=_VISION_MODEL,
+                model=model,
                 messages=[{
                     "role": "user",
-                    "content": _CAPTION_PROMPT,
+                    "content": prompt,
                     "images": [_image_bytes_for_ollama(path)],
                 }],
-                options={"temperature": 0.2, "num_ctx": 2048, "num_gpu": _VISION_NUM_GPU},
+                options={"temperature": 0.2, "num_ctx": 2048, "num_gpu": _VISION_NUM_GPU, "num_predict": num_predict},
             )
             _caption_errors = 0
             return (resp.message.content or "").strip()
@@ -238,7 +269,7 @@ def caption_image(path: Path) -> str:
                 logger.warning(
                     "Modelo '%s' no descargado en Ollama ('ollama pull %s'). "
                     "Captioning desactivado para esta sesion.",
-                    _VISION_MODEL, _VISION_MODEL,
+                    model, model,
                 )
                 _caption.disable()
                 _caption_errors = 0
@@ -298,32 +329,34 @@ def extract_image_text(path: Path) -> str:
 _async_caption_sem = asyncio.Semaphore(1)
 
 
-async def caption_image_async(path: Path) -> str:
+async def caption_image_async(path: Path, retry: bool = False) -> str:
     """Caption con AsyncClient + asyncio.Semaphore — cancelable por asyncio.
 
     A diferencia de caption_image (sync + threading.Semaphore), esta versión
     puede ser cancelada por asyncio.wait_for sin dejar threads bloqueados en
     el semáforo, eliminando los timeouts en cascada entre imágenes del mismo
     grupo de ingesta.
+    retry=True usa un prompt más corto y directo para imágenes donde el modelo
+    devolvió vacío en el primer intento.
     """
     global _caption_errors
     if _caption.disabled:
         return ""
 
+    prompt = _CAPTION_PROMPT_RETRY if retry else _CAPTION_PROMPT
+
+    model = _vision_model()
     async with _async_caption_sem:
         try:
-            # AsyncClient creado por llamada (no cacheado) para evitar
-            # "Event loop is closed" al reutilizar entre event loops distintos.
-            # Timeout 150s > outer wait_for 120s, para que sea asyncio quien corte.
             client = AsyncClient(host=_OLLAMA_URL, timeout=150.0)
             resp = await client.chat(
-                model=_VISION_MODEL,
+                model=model,
                 messages=[{
                     "role": "user",
-                    "content": _CAPTION_PROMPT,
+                    "content": prompt,
                     "images": [_image_bytes_for_ollama(path)],
                 }],
-                options={"temperature": 0.2, "num_ctx": 2048, "num_gpu": _VISION_NUM_GPU},
+                options={"temperature": 0.2, "num_ctx": 2048, "num_gpu": _VISION_NUM_GPU, "num_predict": 220},
             )
             _caption_errors = 0
             return (resp.message.content or "").strip()
@@ -340,7 +373,7 @@ async def caption_image_async(path: Path) -> str:
                 logger.warning(
                     "Modelo '%s' no descargado en Ollama ('ollama pull %s'). "
                     "Captioning desactivado para esta sesion.",
-                    _VISION_MODEL, _VISION_MODEL,
+                    model, model,
                 )
                 _caption.disable()
                 _caption_errors = 0
@@ -366,9 +399,13 @@ async def extract_image_text_async(path: Path) -> str:
     Si captioning tarda demasiado o falla, OCR ya tiene resultado → el fichero
     nunca se marca como error solo por lentitud del modelo de visión.
 
-    Timeouts internos (menores que el outer 120s del scanner):
-      - OCR: 30s (RapidOCR en imágenes grandes, muy rara vez >5s)
-      - Caption: 90s (Moondream en Ollama; incluye espera de semáforo)
+    Timeouts:
+      - OCR: 30s (asyncio.wait_for — operación de hilo puro, sin timeout propio)
+      - Caption: el AsyncClient ya tiene timeout=150s para la llamada a Ollama.
+        No se envuelve caption_image_async con wait_for porque el semáforo puede
+        esperar legítimamente mientras otra imagen está siendo captionada — ese
+        tiempo de cola no es un cuelgue. El timeout del cliente cubre inferencia
+        atascada.
     """
     async def _ocr_task() -> str:
         try:
@@ -380,9 +417,11 @@ async def extract_image_text_async(path: Path) -> str:
 
     async def _caption_task() -> str:
         try:
-            return await asyncio.wait_for(
-                caption_image_async(path), timeout=120.0,
-            )
+            result = await caption_image_async(path)
+            if result:
+                return result
+            # Retry con prompt más directo si el modelo devolvió vacío
+            return await caption_image_async(path, retry=True)
         except Exception:  # noqa: BLE001
             return ""
 

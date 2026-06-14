@@ -33,6 +33,7 @@ def _empty_snapshot() -> dict:
         "phase": "scanning",
         "paused": False,
         "error": None,
+        "startedAt": None,
         "scan":    {"current": 0, "total": 0, "file": ""},
         "extract": {"current": 0, "total": 0, "file": ""},
         "embed":   {"current": 0, "total": 0},
@@ -105,7 +106,7 @@ _cancel_existing = cancel_ingest_for_source
 
 
 @router.post("/{source_id}/ingest", dependencies=[Depends(require_auth)])
-async def ingest(source_id: PydanticObjectId, request: Request):
+async def ingest(source_id: PydanticObjectId, request: Request, force: bool = True):
     sid = str(source_id)
 
     # Si ya hay una ingesta activa para esta fuente, rechazar en lugar de
@@ -118,7 +119,9 @@ async def ingest(source_id: PydanticObjectId, request: Request):
 
     queue: asyncio.Queue[dict] = asyncio.Queue()
     _queues[sid] = queue
-    _progress[sid] = _empty_snapshot()
+    snap = _empty_snapshot()
+    snap["startedAt"] = int(time.time() * 1000)
+    _progress[sid] = snap
 
     async def emit(event: dict) -> None:
         # Toda emision pasa por aqui: actualiza el snapshot persistente (para
@@ -154,7 +157,7 @@ async def ingest(source_id: PydanticObjectId, request: Request):
     async def runner() -> None:
         try:
             await emit({"type": "scanning"})
-            await ingest_source(source_id, on_progress)
+            await ingest_source(source_id, on_progress, force=force)
             await emit({"type": "done"})
         except asyncio.CancelledError:
             await emit({"type": "cancelled"})

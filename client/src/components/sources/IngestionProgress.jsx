@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getSources, pauseIngest, resumeIngest, cancelIngest, getIngestProgress } from "../../api/sources.js";
-import { Search, Brain, Pause, Play, X } from "lucide-react";
+import { Search, Brain, Pause, Play, X, ChevronDown, ChevronUp } from "lucide-react";
 import Button from "../ui/Button.jsx";
 import ProgressBar from "../ui/ProgressBar.jsx";
 
@@ -12,7 +12,7 @@ function formatDuration(seconds) {
   return s > 0 ? `${m}m ${s}s` : `${m}m`;
 }
 
-export default function IngestionProgress({ sourceId, onDone }) {
+export default function IngestionProgress({ sourceId, onDone, force = true }) {
   const { t } = useTranslation();
 
   // "connecting" | "reconnecting" | "scanning" | "extracting" | "embedding"
@@ -31,6 +31,19 @@ export default function IngestionProgress({ sourceId, onDone }) {
   const [error,      setError]      = useState(null);
   const [paused,     setPaused]     = useState(false);
   const [elapsedSec, setElapsedSec] = useState(0);
+  // Mostrar/ocultar las barras de detalle. Por defecto visible; se recuerda en
+  // localStorage para que la preferencia persista entre sesiones y refrescos.
+  const [showDetails, setShowDetails] = useState(
+    () => localStorage.getItem("seekpal_ingest_details") !== "0"
+  );
+
+  function toggleDetails() {
+    setShowDetails((v) => {
+      const nv = !v;
+      localStorage.setItem("seekpal_ingest_details", nv ? "1" : "0");
+      return nv;
+    });
+  }
 
   const doneRef        = useRef(false);
   const pollRef        = useRef(null);
@@ -59,6 +72,9 @@ export default function IngestionProgress({ sourceId, onDone }) {
   // reales en vez de quedarse en la barra indeterminada de "reconnecting".
   function applySnapshot(snap) {
     if (!snap) return;
+    // Sembrar el cronómetro con la hora de inicio real del servidor: así el
+    // tiempo transcurrido sobrevive a un F5 (antes el reloj rearrancaba de 0).
+    if (snap.startedAt) startTimeRef.current = snap.startedAt;
     if (snap.scan)    setScanProgress({ current: snap.scan.current, total: snap.scan.total, file: snap.scan.file });
     if (snap.extract) setExtractProgress({ current: snap.extract.current, total: snap.extract.total, file: snap.extract.file });
     if (snap.index)   setIndexProgress({ current: snap.index.current, total: snap.index.total, file: snap.index.file });
@@ -110,7 +126,7 @@ export default function IngestionProgress({ sourceId, onDone }) {
 
     const token = localStorage.getItem("seekpal_token");
     const xhr = new XMLHttpRequest();
-    xhr.open("POST", `/api/sources/${sourceId}/ingest`, true);
+    xhr.open("POST", `/api/sources/${sourceId}/ingest?force=${force}`, true);
     xhr.setRequestHeader("Authorization", `Bearer ${token}`);
     xhr.setRequestHeader("Accept", "text/event-stream");
 
@@ -243,9 +259,11 @@ export default function IngestionProgress({ sourceId, onDone }) {
 
   // Barra 2: proceso IA — usamos la marca de agua (nunca retrocede)
   const aiTotal   = extractProgress.total || indexProgress.total || 0;
-  // Progreso real = ficheros completados (indexados). Si no hay datos de index
-  // aún, usar la marca de agua (ficheros extraídos) como aproximación.
-  const aiDone    = indexProgress.current > 0 ? indexProgress.current : filesWatermark;
+  // filesWatermark es el máximo acumulado de extract+index: avanza per-file
+  // durante extracción y nunca retrocede al cambiar de fase. Usarlo siempre
+  // evita el salto atrás al iniciar indexado (index.current=1 < watermark=15)
+  // y el bloqueo durante extracción de grupos 2+ (index.current queda obsoleto).
+  const aiDone    = filesWatermark;
   const aiPct     = isDone ? 100
                   : aiTotal > 0 ? Math.round((aiDone / aiTotal) * 100)
                   : 0;
@@ -274,6 +292,8 @@ export default function IngestionProgress({ sourceId, onDone }) {
   return (
     <div className="mt-4 space-y-3">
 
+      {showDetails && (
+      <>
       {/* ── Barra 1: Escaneo de ficheros ─────────────────────────────── */}
       <div className="space-y-1.5">
         <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
@@ -329,12 +349,25 @@ export default function IngestionProgress({ sourceId, onDone }) {
           )}
         </div>
       )}
+      </>
+      )}
 
       {/* ── Controles + cronómetro ────────────────────────────────────── */}
       <div className="flex items-center justify-between">
-        <p className={`text-xs font-medium ${isDone ? "text-success" : "text-slate-400 dark:text-slate-500"}`}>
-          {isDone ? `${t("ingest.done")} — ${formatDuration(elapsedSec)}` : formatDuration(elapsedSec)}
-        </p>
+        <div className="flex items-center gap-2">
+          <p className={`text-xs font-medium ${isDone ? "text-success" : "text-slate-400 dark:text-slate-500"}`}>
+            {isDone ? `${t("ingest.done")} — ${formatDuration(elapsedSec)}` : formatDuration(elapsedSec)}
+          </p>
+          <button
+            type="button"
+            onClick={toggleDetails}
+            className="flex items-center gap-0.5 text-[10px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+            title={t("ingest.details", "Detalles")}
+          >
+            {t("ingest.details", "Detalles")}
+            {showDetails ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+          </button>
+        </div>
 
         {isActive && (
           <div className="flex items-center gap-1.5">

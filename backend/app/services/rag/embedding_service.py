@@ -7,8 +7,9 @@ El usuario instala el paquete de onnxruntime que corresponde a su hardware:
   - onnxruntime-gpu      → NVIDIA CUDA
   - onnxruntime-directml → AMD/Intel iGPU en Windows
 
-BGE-M3 puede producir NaN en ciertos textos. Estrategia recursiva: partir
-el texto por la mitad hasta que funcione o sea demasiado corto.
+multilingual-e5-large puede producir NaN en ciertos textos (quirk observado
+también en modelos anteriores; se conserva la estrategia recursiva como defensa
+genérica): partir el texto por la mitad hasta que funcione o sea demasiado corto.
 """
 
 from __future__ import annotations
@@ -80,6 +81,12 @@ except Exception:
 _CTRL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f�]")
 _MIN_SPLIT_CHARS = 80
 
+# Prefijos requeridos por intfloat/multilingual-e5-large (y familia e5 en general).
+# El modelo fue entrenado con "query: " / "passage: " antepuestos; sin ellos el input
+# está fuera de distribución y el recall denso se degrada, sobre todo cross-lingual.
+_E5_QUERY_PREFIX   = "query: "
+_E5_PASSAGE_PREFIX = "passage: "
+
 
 def _detect_active_provider(model_obj: object) -> str:
     """Inspecciona el modelo FastEmbed para detectar que ONNX provider esta usando.
@@ -143,7 +150,7 @@ def _sanitize(text: str) -> str:
 
 
 class EmbeddingService:
-    """Embedding denso BGE-M3 (1024D) via FastEmbed ONNX."""
+    """Embedding denso multilingual-e5-large (1024D) via FastEmbed ONNX."""
 
     def __init__(self, model: str, batch_size: int):
         import warnings
@@ -155,6 +162,10 @@ class EmbeddingService:
             except Exception:
                 self._model = TextEmbedding(model_name=model)
         self._batch_size = batch_size
+        # Activar prefijos e5 si el modelo es de la familia e5 (intfloat/multilingual-e5-*,
+        # intfloat/e5-*, etc.). Guard: si se cambia a bge-m3 u otro modelo sin prefijos,
+        # self._e5 será False y los prefijos no se aplicarán.
+        self._e5: bool = "e5" in model.lower()
         # Detectar provider activo para logging y system/info endpoint
         self.active_provider = _detect_active_provider(self._model)
         _LABEL = {
@@ -172,18 +183,23 @@ class EmbeddingService:
         if not texts:
             return []
         sanitized = [_sanitize(t) for t in texts]
+        # Para modelos e5, anteponer el prefijo "passage: " a cada texto saneado.
+        # El prefijo va SOLO al embedding denso; el texto original (sanitized) se
+        # preserva para el fallback por-texto de forma que el manejo de NaN siga
+        # operando sobre el texto con prefijo (igual que en el batch principal).
+        to_embed = [_E5_PASSAGE_PREFIX + t for t in sanitized] if self._e5 else sanitized
         try:
-            raw = await asyncio.to_thread(self._embed_sync, sanitized)
+            raw = await asyncio.to_thread(self._embed_sync, to_embed)
         except Exception:
             raw = [None] * len(sanitized)  # type: ignore[list-item]
 
         result: list[list[float] | None] = []
-        for text, vec in zip(sanitized, raw):
+        for prefixed, vec in zip(to_embed, raw):
             if vec is None:
-                result.append(await self._embed_one_safe(text))
+                result.append(await self._embed_one_safe(prefixed))
                 continue
             if np.isnan(np.array(vec, dtype=np.float32)).any():
-                result.append(await self._embed_one_safe(text))
+                result.append(await self._embed_one_safe(prefixed))
             else:
                 result.append(vec)
         return result
@@ -212,7 +228,10 @@ class EmbeddingService:
             return left or right
 
     async def embed_query(self, text: str) -> list[float]:
-        result = await self._embed_one_safe(_sanitize(text))
+        sanitized = _sanitize(text)
+        # Para modelos e5, anteponer "query: " antes de embeddear la consulta.
+        to_embed = (_E5_QUERY_PREFIX + sanitized) if self._e5 else sanitized
+        result = await self._embed_one_safe(to_embed)
         if result is None:
             raise RuntimeError(f"Cannot embed query (too short or NaN): {text[:60]!r}")
         return result
@@ -246,7 +265,7 @@ class SparseEmbeddingService:
 
 
 class RerankerService:
-    """Cross-encoder reranker via FastEmbed (BGE-reranker-v2-m3 por defecto).
+    """Cross-encoder reranker via FastEmbed (jinaai/jina-reranker-v2-base-multilingual por defecto).
 
     Se usa despues del retrieval inicial: el hybrid search devuelve top_k * N
     candidatos, el reranker los reordena con un cross-encoder mas preciso y
@@ -254,7 +273,7 @@ class RerankerService:
 
     Usa los mismos providers ONNX (CUDA/DirectML/CPU) que TextEmbedding.
     El modelo se carga en __init__ — coste fijo de arranque ~1s en GPU, ~3s
-    en CPU. Tamano: BAAI/bge-reranker-v2-m3 ~570 MB.
+    en CPU. Tamano: jinaai/jina-reranker-v2-base-multilingual ~570 MB.
     """
 
     def __init__(self, model: str, device: str = "auto") -> None:

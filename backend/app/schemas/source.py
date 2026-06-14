@@ -2,7 +2,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.models.config import OcrQuality, WhisperModel
+from app.models.config import OcrQuality, VisionModel, WhisperModel
 
 
 class AddSourceRequest(BaseModel):
@@ -22,3 +22,4 @@ class SettingsPatch(BaseModel):
     videoFrameInterval: int | None = Field(default=None, ge=1, le=600)
     videoMaxFrames: int | None = Field(default=None, ge=1, le=500)
     ocrQuality: OcrQuality | None = None
+    visionModel: VisionModel | None = None

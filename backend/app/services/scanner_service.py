@@ -17,6 +17,7 @@ from pymongo import UpdateOne
 
 from app.models.file import FileDoc
 from app.models.source import Source
+from app.services.rag.text_enrichment import build_path_context
 from app.utils import metadata_extractor
 from app.utils.mime_classifier import classify, is_indexable
 
@@ -36,7 +37,7 @@ _INDEX_GROUP = 15   # ficheros por grupo
 
 
 def _chunk_batch_size() -> int:
-    """Lee el tamano de lote de embedding desde settings (BGE-M3 en CPU: ~8)."""
+    """Lee el tamano de lote de embedding desde settings (multilingual-e5-large en CPU: ~8)."""
     from app.core.config import settings
     return max(1, settings.rag_embed_batch)
 
@@ -125,17 +126,23 @@ def _build_doc(source_id: PydanticObjectId, file_path: Path) -> dict | None:
 async def ingest_source(
     source_id: PydanticObjectId,
     on_progress: ProgressCallback,
+    force: bool = True,
 ) -> None:
     source = await Source.get(source_id)
     if source is None:
         raise ValueError("Fuente no encontrada")
 
-    src_label = f"{source.name}"
+    src_label = source.name
     source.status = "scanning"
     await source.save()
 
     t_ingest_start = time.perf_counter()
-    logger.info("[%s] Iniciando ingesta: %s", src_label, source.path)
+
+    if not force:
+        await _ingest_incremental(source_id, source, src_label, on_progress, t_ingest_start)
+        return
+
+    logger.info("[%s] Iniciando ingesta completa: %s", src_label, source.path)
 
     try:
         all_paths = await asyncio.to_thread(_walk, Path(source.path))
@@ -188,7 +195,7 @@ async def ingest_source(
 
         rag_stats: dict[str, int] | None = None
         try:
-            rag_stats = await _index_text_documents(source_id, src_label=src_label, on_progress=on_progress)
+            rag_stats = await _index_text_documents(source_id, src_label=src_label, on_progress=on_progress, source_root=source.path)
         except Exception as exc:
             logger.error("[%s] RAG indexing fallido: %s", src_label, exc)
 
@@ -210,7 +217,7 @@ async def ingest_source(
 
         elapsed = time.perf_counter() - t_ingest_start
         m, s = divmod(int(elapsed), 60)
-        logger.info("[%s] Ingesta finalizada: %d ficheros totales — %dm %ds",
+        logger.info("[%s] Ingesta completa finalizada: %d ficheros — %dm %ds",
                     src_label, file_count, m, s)
     except Exception:
         if await Source.get(source_id) is not None:
@@ -220,10 +227,180 @@ async def ingest_source(
         raise
 
 
+async def _ingest_incremental(
+    source_id: PydanticObjectId,
+    source,
+    src_label: str,
+    on_progress: ProgressCallback,
+    t_ingest_start: float,
+) -> None:
+    """Ingesta incremental: nuevos ficheros, modificados y fallidos/pendientes."""
+    logger.info("[%s] Iniciando ingesta incremental: %s", src_label, source.path)
+
+    try:
+        from beanie.operators import In as BIn
+
+        all_paths = await asyncio.to_thread(_walk, Path(source.path))
+        current_path_set = {str(p) for p in all_paths}
+
+        existing_docs = await FileDoc.find(FileDoc.sourceId == source_id).to_list()
+        existing_map: dict[str, FileDoc] = {doc.path: doc for doc in existing_docs}
+
+        from app.core.database import get_vector_service
+        vector = get_vector_service()
+
+        # --- Ficheros eliminados del disco: borrar vectores + FileDoc ---
+        deleted_paths = set(existing_map.keys()) - current_path_set
+        if deleted_paths:
+            for path_str in deleted_paths:
+                doc = existing_map[path_str]
+                try:
+                    await asyncio.to_thread(vector.delete_by_file, str(doc.id))
+                except Exception as exc:
+                    logger.warning("[%s] Error borrando vectores de %s: %s", src_label, path_str, exc)
+            await FileDoc.find(
+                FileDoc.sourceId == source_id,
+                BIn(FileDoc.path, list(deleted_paths)),
+            ).delete()
+            logger.info("[%s] Eliminados %d ficheros borrados del disco", src_label, len(deleted_paths))
+
+        # --- Clasificar ficheros actuales ---
+        new_paths: list[Path] = []
+        modified_paths: list[tuple[Path, FileDoc]] = []
+        failed_docs: list[FileDoc] = []
+
+        for path in all_paths:
+            path_str = str(path)
+            if path_str not in existing_map:
+                new_paths.append(path)
+            else:
+                doc = existing_map[path_str]
+                try:
+                    stat = path.stat()
+                except OSError:
+                    continue
+                # modifiedAt llega de MongoDB como datetime naive (UTC sin tz). Si se
+                # pasa a timestamp() directamente Python lo trata como hora local →
+                # diferencia de horas con st_mtime (UTC epoch). replace(tzinfo=UTC)
+                # lo marca explícitamente como UTC sin cambiar el valor.
+                stored_ts = doc.modifiedAt.replace(tzinfo=UTC).timestamp()
+                mtime_changed = abs(stored_ts - stat.st_mtime) > 2.0
+                size_changed = doc.size != stat.st_size
+                if mtime_changed or size_changed:
+                    modified_paths.append((path, doc))
+                elif doc.metadata.rag is None or doc.metadata.rag.indexStatus in ("failed", "pending"):
+                    failed_docs.append(doc)
+
+        logger.info(
+            "[%s] Incremental: %d nuevos · %d modificados · %d fallidos/pendientes · %d eliminados",
+            src_label, len(new_paths), len(modified_paths), len(failed_docs), len(deleted_paths),
+        )
+
+        # Borrar vectores de ficheros modificados ANTES del upsert (el _id se preserva)
+        for _, doc in modified_paths:
+            try:
+                await asyncio.to_thread(vector.delete_by_file, str(doc.id))
+            except Exception as exc:
+                logger.warning("[%s] Error borrando vectores de %s: %s", src_label, doc.path, exc)
+
+        # --- Fase de escaneo: FileDoc para nuevos y modificados ---
+        paths_to_scan = new_paths + [p for p, _ in modified_paths]
+        # Los IDs de modificados son conocidos (se preservan tras upsert)
+        file_ids_to_index: set[str] = {str(doc.id) for _, doc in modified_paths}
+
+        total_scan = len(paths_to_scan)
+        processed_scan = 0
+        ops_buffer: list[UpdateOne] = []
+
+        # Emitir progreso inicial de escaneo aunque no haya ficheros
+        await on_progress(0, max(total_scan, 0), "")
+
+        if paths_to_scan:
+            semaphore = asyncio.Semaphore(CONCURRENCY)
+
+            async def _process_one_inc(fp: Path):
+                async with semaphore:
+                    return await asyncio.to_thread(_build_doc, source_id, fp)
+
+            for coro in asyncio.as_completed([_process_one_inc(p) for p in paths_to_scan]):
+                doc_dict = await coro
+                processed_scan += 1
+                if doc_dict is not None:
+                    ops_buffer.append(UpdateOne(
+                        {"sourceId": doc_dict["sourceId"], "path": doc_dict["path"]},
+                        {"$set": doc_dict},
+                        upsert=True,
+                    ))
+                    await on_progress(processed_scan, total_scan, Path(doc_dict["path"]).name)
+                else:
+                    await on_progress(processed_scan, total_scan, "")
+
+                if len(ops_buffer) >= BULK_BATCH:
+                    await FileDoc.get_pymongo_collection().bulk_write(ops_buffer, ordered=False)
+                    ops_buffer.clear()
+
+            if ops_buffer:
+                await FileDoc.get_pymongo_collection().bulk_write(ops_buffer, ordered=False)
+
+            # Obtener los IDs de ficheros nuevos (creados por el upsert)
+            if new_paths:
+                new_path_strs = [str(p) for p in new_paths]
+                new_docs = await FileDoc.find(
+                    FileDoc.sourceId == source_id,
+                    BIn(FileDoc.path, new_path_strs),
+                ).to_list()
+                file_ids_to_index.update(str(d.id) for d in new_docs)
+
+        # Añadir IDs de ficheros fallidos/pendientes
+        for doc in failed_docs:
+            file_ids_to_index.add(str(doc.id))
+
+        # --- Indexación RAG solo para los ficheros que lo necesitan ---
+        rag_stats: dict[str, int] | None = None
+        if file_ids_to_index:
+            try:
+                rag_stats = await _index_text_documents(
+                    source_id, src_label=src_label, on_progress=on_progress,
+                    file_ids=file_ids_to_index, source_root=source.path,
+                )
+            except Exception as exc:
+                logger.error("[%s] RAG indexing incremental fallido: %s", src_label, exc)
+
+        if await Source.get(source_id) is None:
+            return
+
+        # Recomputar totales desde todos los FileDoc de la fuente
+        all_docs = await FileDoc.find(FileDoc.sourceId == source_id).to_list()
+        file_count = len(all_docs)
+        source.status = "done"
+        source.lastIngested = datetime.now(UTC)
+        source.lastIngestDurationSecs = int(time.perf_counter() - t_ingest_start)
+        source.fileCount = file_count
+        source.indexedCount = sum(1 for d in all_docs if d.metadata.rag and d.metadata.rag.indexStatus == "done")
+        source.skippedCount = sum(1 for d in all_docs if d.metadata.rag and d.metadata.rag.indexStatus == "skipped")
+        source.failedCount  = sum(1 for d in all_docs if d.metadata.rag and d.metadata.rag.indexStatus == "failed")
+        await source.save()
+
+        elapsed = time.perf_counter() - t_ingest_start
+        m, s = divmod(int(elapsed), 60)
+        logger.info(
+            "[%s] Ingesta incremental finalizada: %d ficheros totales — %dm %ds",
+            src_label, file_count, m, s,
+        )
+    except Exception:
+        if await Source.get(source_id) is not None:
+            source.status = "error"
+            await source.save()
+        logger.error("[%s] Ingesta incremental terminada con error", src_label)
+        raise
+
+
 async def _index_text_documents(
     source_id: PydanticObjectId,
     src_label: str = "",
     on_progress: ProgressCallback | None = None,
+    file_ids: set[str] | None = None,
+    source_root: str | None = None,
 ) -> dict[str, int]:
     """Indexación RAG en grupos de _INDEX_GROUP ficheros.
 
@@ -238,6 +415,7 @@ async def _index_text_documents(
     compatibilidad histórica aunque ya cubre todos los tipos indexables.
     """
     from beanie.operators import In
+    from beanie import PydanticObjectId as OID
 
     from app.core.database import get_index_service
     from app.models.file import RagMetadata
@@ -256,10 +434,18 @@ async def _index_text_documents(
     if runtime_settings.get("indexMultimedia", True):
         categories.extend(["image", "audio", "video"])
 
-    query = FileDoc.find(
-        FileDoc.sourceId == source_id,
-        In(FileDoc.category, categories),
-    )
+    if file_ids is not None:
+        oids = [OID(fid) for fid in file_ids]
+        query = FileDoc.find(
+            FileDoc.sourceId == source_id,
+            In(FileDoc.category, categories),
+            In(FileDoc.id, oids),
+        )
+    else:
+        query = FileDoc.find(
+            FileDoc.sourceId == source_id,
+            In(FileDoc.category, categories),
+        )
     files = await query.to_list()
     total = len(files)
     if not files:
@@ -275,7 +461,7 @@ async def _index_text_documents(
     _EXTRACT_TIMEOUT_TEXT = 45.0
     _EXTRACT_TIMEOUT_PDF_DOCLING = 1800.0  # 30 min/PDF con Docling
     _EXTRACT_TIMEOUT_AUDIO = 600.0   # 10 min/audio
-    _EXTRACT_TIMEOUT_IMAGE = 120.0   # 2 min/imagen (OCR + caption Moondream)
+    _EXTRACT_TIMEOUT_IMAGE = 900.0   # 15 min/imagen: incluye cola de semáforo (hasta 8 imgs x ~100s) + inferencia CPU
     _EXTRACT_TIMEOUT_VIDEO = 1800.0  # 30 min/video
 
     from app.core import runtime_settings as _rs
@@ -300,6 +486,7 @@ async def _index_text_documents(
                         category=file_doc.category,
                         extension=file_doc.extension,
                         path=Path(file_doc.path),
+                        path_context=build_path_context(file_doc.path, source_root),
                     ),
                     timeout=_timeout_for(file_doc.category, file_doc.extension),
                 )
@@ -375,8 +562,10 @@ async def _index_text_documents(
         await asyncio.gather(*[_prepare_tracked(fd, i) for i, fd in enumerate(group)])
 
         # Fase 2 — embedding (dense + sparse) en lotes de CHUNK_BATCH con progreso por lote
+        # Usar embed_text (contexto de ruta + texto del chunk) en lugar de text seco.
+        # El contexto de ruta enriquece el embedding sin contaminar el payload/snippet.
         all_texts: list[str] = [
-            chunk.text
+            chunk.embed_text
             for prep in prepared_group
             if prep is not None and not prep.skipped
             for chunk in prep.chunks

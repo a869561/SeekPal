@@ -108,7 +108,9 @@ class VideoExtractor(BaseExtractor):
             if frames:
                 captions: list[str] = []
                 for i, frame in enumerate(frames):
-                    cap = caption_image(frame)
+                    # brief=True: prompt de una frase + num_predict=96 para acotar el
+                    # coste de generación en frames numerosos (coste de prefill fijo).
+                    cap = caption_image(frame, brief=True)
                     if cap:
                         captions.append(f"[{_timestamp(i, interval)}] {cap}")
                 if captions:

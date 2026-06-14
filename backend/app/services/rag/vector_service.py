@@ -1,7 +1,7 @@
 """Wrapper sobre QdrantClient con soporte de búsqueda híbrida dense+sparse.
 
 La colección usa dos campos vectoriales:
-  - "dense"  (1024D cosine) → embeddings BGE-M3
+  - "dense"  (1024D cosine) → embeddings multilingual-e5-large
   - "bm25"   (sparse IDF)   → tokens BM25 via FastEmbed Qdrant/bm25
 
 La búsqueda fusiona ambas ramas con Reciprocal Rank Fusion (RRF).
@@ -165,6 +165,7 @@ def _to_retrieved(point) -> RetrievedChunk:
         category=p.get("category", "other"),
         extension=p.get("extension", ""),
         score=float(point.score),
+        context=p.get("context", ""),
     )
 
 

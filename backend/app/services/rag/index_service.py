@@ -83,6 +83,7 @@ def _build_points(
                 "category": category,
                 "extension": extension,
                 "file_name": file_name,
+                "context": c.context,
             },
         )
         for c, dense, sparse in zip(chunks, dense_vectors, sparse_vectors)
@@ -122,7 +123,7 @@ class IndexService:
             status = "failed" if prep.error and not prep.error.startswith(("empty", "no chunks", "skipped")) else "skipped"
             return IndexResult(status=status, chunks=0, extractor=prep.extractor, error=prep.error)
 
-        texts = [c.text for c in prep.chunks]
+        texts = [c.embed_text for c in prep.chunks]
         try:
             dense_vecs, sparse_vecs = await asyncio.gather(
                 self._embedding.embed_texts(texts),
@@ -145,8 +146,14 @@ class IndexService:
         category: str,
         extension: str,
         path: Path,
+        path_context: str = "",
     ) -> PreparedFile:
-        """Extract text and chunk — no embedding yet."""
+        """Extract text and chunk — no embedding yet.
+
+        path_context: tokens de ruta derivados de build_path_context() que se
+        asignan a chunk.context para enriquecer embed_text (denso+sparse) sin
+        contaminar el payload/snippet (que usa chunk.text).
+        """
         extractor = get_extractor(extension, category, path=path)
         if extractor is None:
             return PreparedFile(file_id, source_id, file_name, category, extension, error="skipped")
@@ -175,6 +182,11 @@ class IndexService:
         if not chunks:
             return PreparedFile(file_id, source_id, file_name, category, extension,
                                 extractor=ext_name, error="no chunks produced")
+
+        # Asignar contexto de ruta a cada chunk para enriquecer el embedding.
+        if path_context:
+            for chunk in chunks:
+                chunk.context = path_context
 
         return PreparedFile(file_id, source_id, file_name, category, extension,
                             chunks=chunks, extractor=ext_name)

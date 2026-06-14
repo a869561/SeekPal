@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 WhisperModel = Literal["tiny", "base", "small", "medium", "large"]
 OcrQuality   = Literal["mobile", "server"]
+VisionModel  = Literal["qwen2.5vl:3b", "moondream"]
 
 
 def _now_utc() -> datetime:
@@ -36,6 +37,7 @@ class UserSettings(BaseModel):
     videoFrameInterval: int = Field(default=30, ge=1, le=600)
     videoMaxFrames: int = Field(default=20, ge=1, le=500)
     ocrQuality: OcrQuality = "mobile"  # mobile=rápido (~15 MB) | server=preciso (~140 MB)
+    visionModel: VisionModel = "qwen2.5vl:3b"  # qwen2.5vl:3b=mejor calidad (default) | moondream=más rápido
 
 
 class Config(Document):

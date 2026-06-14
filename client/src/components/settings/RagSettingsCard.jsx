@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2, CheckCircle, AlertCircle, Sparkles, Mic, Film, Layers, RefreshCw, FileText, Download, ScanText } from "lucide-react";
+import { Loader2, CheckCircle, AlertCircle, Sparkles, Mic, Film, Layers, RefreshCw, FileText, Download, ScanText, Eye } from "lucide-react";
 import { getSettings, saveSettings } from "../../api/settings.js";
 import {
   restartApp, invalidateHardwareCache,
@@ -19,6 +19,11 @@ const WHISPER_MODELS = [
   { id: "medium", sizeMB: 769,  note: "Mejor calidad, mas lento" },
 ];
 
+const VISION_MODELS = [
+  { id: "qwen2.5vl:3b", labelKey: "ragSettings.visionModelQwen" },
+  { id: "moondream",    labelKey: "ragSettings.visionModelMoondream" },
+];
+
 // Valores por defecto para campos que el servidor puede devolver como null.
 // Deben coincidir con los ?? fallbacks del JSX para que el formulario no
 // marque un campo como "cambiado" solo por hacer click en él.
@@ -30,12 +35,13 @@ const FIELD_DEFAULTS = {
   videoFrameInterval: 30,
   videoMaxFrames: 20,
   ocrQuality: "mobile",
+  visionModel: "qwen2.5vl:3b",
 };
 
 // Campos que requieren reiniciar el backend para entrar en efecto
 const RESTART_FIELDS = new Set([
   "rerankerEnabled", "whisperModel", "useDocling", "indexMultimedia",
-  "videoFrameInterval", "videoMaxFrames", "ocrQuality",
+  "videoFrameInterval", "videoMaxFrames", "ocrQuality", "visionModel",
 ]);
 
 export default function RagSettingsCard() {
@@ -295,6 +301,25 @@ export default function RagSettingsCard() {
           {WHISPER_MODELS.map((m) => (
             <option key={m.id} value={m.id}>
               {m.id} ({m.sizeMB} MB) — {m.note}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Modelo de visión (captioning de imágenes) */}
+      <div className="mb-5">
+        <label className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">
+          <Eye size={13} /> {t("ragSettings.visionModel")}
+        </label>
+        <select
+          value={form.visionModel || "qwen2.5vl:3b"}
+          disabled={busy || !(form.indexMultimedia ?? true)}
+          onChange={(e) => update("visionModel", e.target.value)}
+          className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand/50 disabled:opacity-50"
+        >
+          {VISION_MODELS.map((m) => (
+            <option key={m.id} value={m.id}>
+              {t(m.labelKey)}
             </option>
           ))}
         </select>

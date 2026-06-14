@@ -182,7 +182,7 @@ class RetrievalService:
 
         # Rerank con cross-encoder si esta disponible
         if self._reranker:
-            passages = [c.text for c in candidates]
+            passages = [c.embed_text for c in candidates]
             try:
                 scores = await self._reranker.rerank(question, passages)
                 for chunk, new_score in zip(candidates, scores, strict=False):

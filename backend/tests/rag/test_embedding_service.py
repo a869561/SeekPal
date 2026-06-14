@@ -23,11 +23,15 @@ class _FakeTextEmbedding:
                 yield np.full(1024, val, dtype=np.float32)
 
 
-def _make_service(batch_size: int = 8) -> EmbeddingService:
-    """Crea EmbeddingService con modelo fake sin carga de red."""
+def _make_service(batch_size: int = 8, e5: bool = False) -> EmbeddingService:
+    """Crea EmbeddingService con modelo fake sin carga de red.
+
+    e5=True simula el modo con prefijos (intfloat/multilingual-e5-large).
+    """
     svc = object.__new__(EmbeddingService)
     svc._model = _FakeTextEmbedding()
     svc._batch_size = batch_size
+    svc._e5 = e5
     svc.active_provider = "CPUExecutionProvider"  # atributo nuevo para system/info
     return svc
 
@@ -84,3 +88,54 @@ async def test_embed_texts_multiple_items():
     assert len(vectors) == 5
     assert all(v is not None for v in vectors)
     assert all(len(v) == 1024 for v in vectors)
+
+
+# ---------------------------------------------------------------------------
+# Tests para prefijos e5
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_e5_passage_prefix_changes_embedding():
+    """Con e5=True, embed_texts antepone 'passage: ' y el vector difiere del texto crudo."""
+    # El fake model devuelve un vector distinto por texto (hash). Si el prefijo se antepone,
+    # el embedding de "hola" en modo e5 debe ser igual al de "passage: hola" en modo no-e5.
+    svc_e5  = _make_service(e5=True)
+    svc_raw = _make_service(e5=False)
+
+    vecs_e5  = await svc_e5.embed_texts(["hola"])
+    vecs_raw = await svc_raw.embed_texts(["hola"])
+    vecs_prefixed = await svc_raw.embed_texts(["passage: hola"])
+
+    assert vecs_e5[0] is not None
+    assert vecs_raw[0] is not None
+    # e5 debe producir el mismo vector que pasar "passage: hola" directamente
+    assert vecs_e5[0] == pytest.approx(vecs_prefixed[0], abs=1e-6)
+    # e5 debe producir un vector distinto al texto crudo "hola"
+    assert vecs_e5[0] != pytest.approx(vecs_raw[0], abs=1e-6)
+
+
+@pytest.mark.asyncio
+async def test_e5_query_prefix_changes_embedding():
+    """Con e5=True, embed_query antepone 'query: ' y el vector difiere del texto crudo."""
+    svc_e5  = _make_service(e5=True)
+    svc_raw = _make_service(e5=False)
+
+    vec_e5  = await svc_e5.embed_query("buscar documentos")
+    vec_raw = await svc_raw.embed_query("buscar documentos")
+    vec_prefixed = await svc_raw.embed_query("query: buscar documentos")
+
+    # e5 debe producir el mismo vector que "query: buscar documentos" sin prefijo activado
+    assert vec_e5 == pytest.approx(vec_prefixed, abs=1e-6)
+    # e5 debe diferir del texto crudo
+    assert vec_e5 != pytest.approx(vec_raw, abs=1e-6)
+
+
+@pytest.mark.asyncio
+async def test_no_e5_prefix_when_e5_false():
+    """Con e5=False (defecto), los textos se embeben sin modificar."""
+    svc = _make_service(e5=False)
+    vecs = await svc.embed_texts(["passage: hola"])  # si e5=False, no hay doble prefijo
+    # Solo verifica que no hay crash y el resultado tiene la dimensión correcta
+    assert len(vecs) == 1
+    assert vecs[0] is not None
+    assert len(vecs[0]) == 1024

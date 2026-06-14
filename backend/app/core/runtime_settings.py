@@ -16,6 +16,7 @@ Flujo:
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 
@@ -29,6 +30,7 @@ _defaults: dict[str, Any] = {
     "videoFrameInterval": 30,
     "videoMaxFrames": 20,
     "ocrQuality": "mobile",
+    "visionModel": os.getenv("SEEKPAL_VISION_MODEL", "moondream"),
 }
 
 _settings: dict[str, Any] = dict(_defaults)
