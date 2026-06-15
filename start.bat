@@ -200,7 +200,10 @@ REM ---- [7/7] Backend + Frontend ----
 <nul set /p "_=  [7/7] Iniciando..."
 
 REM Backend: PowerShell loop — exit code 99 = reiniciar (aplica cambios de configuracion)
-start "SeekPal Backend" powershell -noexit -noprofile -ExecutionPolicy Bypass -Command "$host.UI.RawUI.WindowTitle = 'SeekPal Backend'; $env:HF_HUB_DISABLE_SYMLINKS_WARNING='1'; $env:PYTHONIOENCODING='utf-8'; Set-Location '%_backdir%'; while ($true) { & '%_py%' -m uvicorn app.main:app --host 0.0.0.0 --port 3000 --log-level warning; if ($LASTEXITCODE -ne 99) { break }; Write-Host '[SeekPal] Aplicando cambios...' -ForegroundColor Cyan; Start-Sleep 1 }"
+REM --host 127.0.0.1: el backend escucha SOLO en este equipo (no accesible desde la red
+REM local ni el movil). La API sirve documentos privados del usuario; junto al JWT, esto
+REM minimiza la superficie de ataque (decision de diseno: app completamente local y privada).
+start "SeekPal Backend" powershell -noexit -noprofile -ExecutionPolicy Bypass -Command "$host.UI.RawUI.WindowTitle = 'SeekPal Backend'; $env:HF_HUB_DISABLE_SYMLINKS_WARNING='1'; $env:PYTHONIOENCODING='utf-8'; Set-Location '%_backdir%'; while ($true) { & '%_py%' -m uvicorn app.main:app --host 127.0.0.1 --port 3000 --log-level warning; if ($LASTEXITCODE -ne 99) { break }; Write-Host '[SeekPal] Aplicando cambios...' -ForegroundColor Cyan; Start-Sleep 1 }"
 
 timeout /t 2 /nobreak >nul
 start "SeekPal Frontend" cmd /k "cd /d "%_frontdir%" && npm run dev"
