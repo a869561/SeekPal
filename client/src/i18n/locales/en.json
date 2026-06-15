@@ -210,6 +210,7 @@
     "placeholder": "Search documents by content or name...",
     "submit":      "Search",
     "searching":   "Searching...",
+    "relevance":   "Relevance to the query",
     "subtitle":    "{{count}} relevant documents for \"{{query}}\"",
     "results":     "{{count}} documents found",
     "empty":       "No results for \"{{query}}\"",

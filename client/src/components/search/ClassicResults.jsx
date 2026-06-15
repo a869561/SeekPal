@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { FileText, Image, Music, Film, File, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import CategoryBadge from "../ui/CategoryBadge.jsx";
+import { relevancePct } from "../../utils/relevance.js";
 
 function formatSize(b) {
   if (b == null) return "";
@@ -60,6 +61,14 @@ function FileResultCard({ file }) {
           <CategoryBadge category={file.category} className="flex-shrink-0">
             {t(`files.categories.${file.category}`, { defaultValue: file.category })}
           </CategoryBadge>
+          {hasRelevance && (
+            <span
+              className="text-xs text-slate-400 dark:text-slate-500 ml-auto flex-shrink-0 tabular-nums"
+              title={t("search.relevance")}
+            >
+              {relevancePct(file._relevanceScore)}%
+            </span>
+          )}
         </div>
         <div className="text-xs text-slate-400 dark:text-slate-500 font-mono truncate mt-0.5">{file.path}</div>
         <div className="flex items-center gap-2 mt-1 text-xs text-slate-500 dark:text-slate-400">

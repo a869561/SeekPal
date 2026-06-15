@@ -210,6 +210,7 @@
     "placeholder": "Busca documentos por contenido o nombre...",
     "submit":      "Buscar",
     "searching":   "Buscando...",
+    "relevance":   "Relevancia respecto a la consulta",
     "subtitle":    "{{count}} documentos relevantes para \"{{query}}\"",
     "results":     "{{count}} documentos encontrados",
     "empty":       "Sin resultados para \"{{query}}\"",

@@ -1,5 +1,6 @@
 import { FileText, BookOpen } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { relevancePct } from "../../utils/relevance.js";
 
 export default function CitationCard({ citation, index }) {
   const { t } = useTranslation();
@@ -19,7 +20,7 @@ export default function CitationCard({ citation, index }) {
             </span>
           )}
           <span className="text-xs text-slate-300 dark:text-slate-600 ml-auto flex-shrink-0">
-            {(citation.score * 100).toFixed(0)}%
+            {relevancePct(citation.score)}%
           </span>
         </div>
       </div>
