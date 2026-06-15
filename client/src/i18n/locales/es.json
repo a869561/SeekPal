@@ -61,6 +61,8 @@
     "ocrQuality":           "Precisión del OCR de imágenes",
     "ocrQualityHint":       "Los modelos server detectan mejor texto estilizado (juegos, portadas, WEBP). Descarga ~140 MB la primera vez.",
     "whisperModel":         "Modelo de transcripción de audio",
+    "whisperModelHint":     "Convierte el audio (y la pista de los vídeos) en texto buscable. Los modelos mayores transcriben con más precisión pero son más lentos.",
+    "visionModelHint":      "Genera una descripción de cada imagen (y de los fotogramas de vídeo) para poder encontrarlas por su contenido.",
     "llmModel":             "Modelo de respuestas (LLM)",
     "llmModelHint":         "El que redacta las respuestas en /preguntar. llama3.2 funciona en PCs sin gráfica; qwen3 da mejor calidad pero necesita GPU/RAM.",
     "llmModelLlama":        "llama3.2:3b — Ligero, funciona en CPU (sin gráfica)",

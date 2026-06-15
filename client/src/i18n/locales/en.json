@@ -61,6 +61,8 @@
     "ocrQuality":           "Image OCR quality",
     "ocrQualityHint":       "Server models better detect stylised text (games, covers, WEBP). Downloads ~140 MB on first use.",
     "whisperModel":         "Audio transcription model",
+    "whisperModelHint":     "Turns audio (and the soundtrack of videos) into searchable text. Larger models transcribe more accurately but are slower.",
+    "visionModelHint":      "Generates a description of each image (and of video frames) so they can be found by their content.",
     "llmModel":             "Answer model (LLM)",
     "llmModelHint":         "The one that writes answers in /ask. llama3.2 runs on GPU-less PCs; qwen3 gives better quality but needs GPU/RAM.",
     "llmModelLlama":        "llama3.2:3b — Lightweight, runs on CPU (no GPU)",

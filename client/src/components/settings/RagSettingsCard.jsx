@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2, CheckCircle, AlertCircle, Sparkles, Mic, Film, Layers, RefreshCw, FileText, Download, ScanText, Eye, MessageSquare } from "lucide-react";
+import { Loader2, CheckCircle, AlertCircle, Sparkles, Mic, Film, Layers, RefreshCw, FileText, Download, ScanText, Eye, MessageSquare, HardDrive } from "lucide-react";
 import { getSettings, saveSettings } from "../../api/settings.js";
+import InfoHint from "../ui/InfoHint.jsx";
 import {
   restartApp, invalidateHardwareCache,
   getDoclingStatus, installDocling,
@@ -191,36 +192,23 @@ export default function RagSettingsCard() {
       </div>
 
       {/* Reranker */}
-      <div className="mb-5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-start gap-2">
-            <Layers size={16} className="text-slate-400 mt-0.5 shrink-0" />
-            <div>
-              <div className="text-sm font-medium text-slate-700 dark:text-slate-200">{t("ragSettings.reranker")}</div>
-              <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{t("ragSettings.rerankerHint")}</div>
-            </div>
-          </div>
-          <Toggle
-            checked={form.rerankerEnabled ?? true}
-            onChange={(v) => update("rerankerEnabled", v)}
-            disabled={busy}
-          />
-        </div>
+      <div className="mb-5 flex items-center justify-between gap-3">
+        <OptionHeader icon={Layers} title={t("ragSettings.reranker")} hint={t("ragSettings.rerankerHint")} />
+        <Toggle
+          checked={form.rerankerEnabled ?? true}
+          onChange={(v) => update("rerankerEnabled", v)}
+          disabled={busy}
+        />
       </div>
 
       {/* Modelo LLM de respuestas (conmutable: CPU vs GPU) */}
       <div className="mb-5">
-        <label className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">
-          <MessageSquare size={13} /> {t("ragSettings.llmModel")}
-        </label>
-        <p className="text-xs text-slate-400 dark:text-slate-500 mb-2 ml-5">
-          {t("ragSettings.llmModelHint")}
-        </p>
+        <OptionHeader icon={MessageSquare} title={t("ragSettings.llmModel")} hint={t("ragSettings.llmModelHint")} />
         <select
           value={form.llmModel || "llama3.2:3b"}
           disabled={busy}
           onChange={(e) => update("llmModel", e.target.value)}
-          className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand/50 disabled:opacity-50"
+          className="w-full mt-2 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand/50 disabled:opacity-50"
         >
           {LLM_MODELS.map((m) => (
             <option key={m.id} value={m.id}>
@@ -232,21 +220,15 @@ export default function RagSettingsCard() {
 
       {/* Docling — PDFs estructurados (opt-in, ~2 GB) */}
       <div className="mb-5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-start gap-2">
-            <FileText size={16} className="text-slate-400 mt-0.5 shrink-0" />
-            <div>
-              <div className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                {t("ragSettings.useDocling", "PDFs estructurados (Docling)")}
-              </div>
-              <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
-                {t(
-                  "ragSettings.useDoclingHint",
-                  "Preserva tablas, multi-columna y OCR de PDFs escaneados. ~30x mas lento que PyMuPDF."
-                )}
-              </div>
-            </div>
-          </div>
+        <div className="flex items-center justify-between gap-3">
+          <OptionHeader
+            icon={FileText}
+            title={t("ragSettings.useDocling", "PDFs estructurados (Docling)")}
+            hint={t(
+              "ragSettings.useDoclingHint",
+              "Preserva tablas, multi-columna y OCR de PDFs escaneados. ~30x mas lento que PyMuPDF."
+            )}
+          />
           <Toggle
             checked={form.useDocling ?? false}
             onChange={(v) => update("useDocling", v)}
@@ -293,36 +275,23 @@ export default function RagSettingsCard() {
       </div>
 
       {/* Multimedia master switch */}
-      <div className="mb-5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-start gap-2">
-            <Film size={16} className="text-slate-400 mt-0.5 shrink-0" />
-            <div>
-              <div className="text-sm font-medium text-slate-700 dark:text-slate-200">{t("ragSettings.indexMultimedia")}</div>
-              <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{t("ragSettings.indexMultimediaHint")}</div>
-            </div>
-          </div>
-          <Toggle
-            checked={form.indexMultimedia ?? true}
-            onChange={(v) => update("indexMultimedia", v)}
-            disabled={busy}
-          />
-        </div>
+      <div className="mb-5 flex items-center justify-between gap-3">
+        <OptionHeader icon={Film} title={t("ragSettings.indexMultimedia")} hint={t("ragSettings.indexMultimediaHint")} />
+        <Toggle
+          checked={form.indexMultimedia ?? true}
+          onChange={(v) => update("indexMultimedia", v)}
+          disabled={busy}
+        />
       </div>
 
       {/* Calidad OCR */}
       <div className="mb-5">
-        <label className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">
-          <ScanText size={13} /> {t("ragSettings.ocrQuality")}
-        </label>
-        <p className="text-xs text-slate-400 dark:text-slate-500 mb-2 ml-5">
-          {t("ragSettings.ocrQualityHint")}
-        </p>
+        <OptionHeader icon={ScanText} title={t("ragSettings.ocrQuality")} hint={t("ragSettings.ocrQualityHint")} />
         <select
           value={form.ocrQuality || "mobile"}
           disabled={busy || !(form.indexMultimedia ?? true)}
           onChange={(e) => update("ocrQuality", e.target.value)}
-          className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand/50 disabled:opacity-50"
+          className="w-full mt-2 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand/50 disabled:opacity-50"
         >
           {OCR_QUALITY_OPTIONS.map((m) => (
             <option key={m.id} value={m.id}>
@@ -334,14 +303,12 @@ export default function RagSettingsCard() {
 
       {/* Modelo Whisper */}
       <div className="mb-5">
-        <label className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">
-          <Mic size={13} /> {t("ragSettings.whisperModel")}
-        </label>
+        <OptionHeader icon={Mic} title={t("ragSettings.whisperModel")} hint={t("ragSettings.whisperModelHint")} />
         <select
           value={form.whisperModel || "small"}
           disabled={busy || !(form.indexMultimedia ?? true)}
           onChange={(e) => update("whisperModel", e.target.value)}
-          className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand/50 disabled:opacity-50"
+          className="w-full mt-2 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand/50 disabled:opacity-50"
         >
           {WHISPER_MODELS.map((m) => (
             <option key={m.id} value={m.id}>
@@ -353,14 +320,12 @@ export default function RagSettingsCard() {
 
       {/* Modelo de visión (captioning de imágenes) */}
       <div className="mb-5">
-        <label className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">
-          <Eye size={13} /> {t("ragSettings.visionModel")}
-        </label>
+        <OptionHeader icon={Eye} title={t("ragSettings.visionModel")} hint={t("ragSettings.visionModelHint")} />
         <select
           value={form.visionModel || "qwen2.5vl:3b"}
           disabled={busy || !(form.indexMultimedia ?? true)}
           onChange={(e) => update("visionModel", e.target.value)}
-          className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand/50 disabled:opacity-50"
+          className="w-full mt-2 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand/50 disabled:opacity-50"
         >
           {VISION_MODELS.map((m) => (
             <option key={m.id} value={m.id}>
@@ -370,27 +335,20 @@ export default function RagSettingsCard() {
         </select>
 
         {/* Liberar el modelo anterior al cambiar (gestión de disco, opt-in) */}
-        <label className="flex items-start gap-2 mt-3 cursor-pointer">
-          <input
-            type="checkbox"
+        <div className="flex items-center justify-between gap-3 mt-3">
+          <OptionHeader icon={HardDrive} title={t("ragSettings.autoFreeVision")} hint={t("ragSettings.autoFreeVisionHint")} />
+          <Toggle
             checked={form.autoFreePreviousVisionModel ?? false}
+            onChange={(v) => update("autoFreePreviousVisionModel", v)}
             disabled={busy}
-            onChange={(e) => update("autoFreePreviousVisionModel", e.target.checked)}
-            className="mt-0.5 accent-brand"
           />
-          <span className="text-xs text-slate-600 dark:text-slate-300">
-            {t("ragSettings.autoFreeVision")}
-            <span className="block text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
-              {t("ragSettings.autoFreeVisionHint")}
-            </span>
-          </span>
-        </label>
+        </div>
       </div>
 
       {/* Frame interval + max frames (solo si multimedia ON) */}
       <div className={`grid grid-cols-2 gap-3 mb-5 ${!(form.indexMultimedia ?? true) ? "opacity-50" : ""}`}>
         <div>
-          <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-1">
+          <label className="text-sm font-medium text-slate-700 dark:text-slate-200 block mb-1">
             {t("ragSettings.frameInterval")}
           </label>
           <div className="flex items-center gap-2">
@@ -413,7 +371,7 @@ export default function RagSettingsCard() {
           </div>
         </div>
         <div>
-          <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-1">
+          <label className="text-sm font-medium text-slate-700 dark:text-slate-200 block mb-1">
             {t("ragSettings.maxFrames")}
           </label>
           <input
@@ -479,6 +437,18 @@ export default function RagSettingsCard() {
           <AlertCircle size={15} /> {t("ragSettings.error")}
         </div>
       )}
+    </div>
+  );
+}
+
+// Cabecera unificada de cada ajuste: icono + título (mismo estilo para todas
+// las opciones, sean conmutadores o desplegables) + "?" con la descripción.
+function OptionHeader({ icon: Icon, title, hint }) {
+  return (
+    <div className="flex items-center gap-2 min-w-0">
+      {Icon && <Icon size={16} className="text-slate-400 shrink-0" />}
+      <span className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{title}</span>
+      <InfoHint text={hint} />
     </div>
   );
 }

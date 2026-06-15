@@ -93,9 +93,18 @@ export default function ModelsCard() {
       <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">{t("modelsCard.subtitle")}</p>
 
       <div className="space-y-2">
-        {models.map((m) => (
+        {models.map((m, i) => {
+          // Cabecera de grupo cuando cambia el tipo (los modelos ya vienen
+          // ordenados por tipo y potencia desde el backend).
+          const showHeader = i === 0 || models[i - 1].category !== m.category;
+          return (
+          <div key={m.id}>
+            {showHeader && (
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1 mt-3 first:mt-0">
+                {t(CATEGORY_KEY[m.category] || "modelsCard.catOther")}
+              </p>
+            )}
           <div
-            key={m.id}
             className="p-3 rounded-xl border border-slate-100 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-700/20"
           >
           <div className="flex items-center justify-between gap-3">
@@ -109,14 +118,12 @@ export default function ModelsCard() {
                 ) : (
                   <span className="text-[10px] text-slate-400">{t("modelsCard.notInstalled")}</span>
                 )}
-                {m.active && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-brand/10 text-brand">{t("modelsCard.inUse")}</span>
-                )}
               </div>
-              <div className="text-[11px] text-slate-400 dark:text-slate-500">
-                {t(CATEGORY_KEY[m.category] || "modelsCard.catOther")}
-                {m.sizeBytes ? ` · ${m.installed ? "" : "~"}${formatSize(m.sizeBytes)}` : ""}
-              </div>
+              {m.sizeBytes && (
+                <div className="text-[11px] text-slate-400 dark:text-slate-500">
+                  {m.installed ? "" : "~"}{formatSize(m.sizeBytes)}
+                </div>
+              )}
             </div>
 
             <div className="flex-shrink-0">
@@ -170,7 +177,9 @@ export default function ModelsCard() {
               <p className="mt-2 text-[11px] text-warning">{m.deleteNote}</p>
             )}
           </div>
-        ))}
+          </div>
+          );
+        })}
       </div>
     </div>
   );

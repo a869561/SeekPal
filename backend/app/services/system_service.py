@@ -420,6 +420,18 @@ _MODEL_CATALOG: list[dict] = [
     {"id": "qwen3:4b",     "category": "llm",    "label": "LLM · calidad (requiere GPU/RAM)"},
 ]
 
+# Orden del panel de modelos: primero por tipo, luego por potencia (de ligero a
+# potente) dentro de cada tipo. Sustituye al antiguo "instalados primero", que
+# dejaba un modelo suelto arriba (p. ej. Audio small) y el resto al fondo.
+_CATEGORY_ORDER = {"llm": 0, "vision": 1, "audio": 2, "ocr": 3, "pdf": 4, "otro": 5}
+_POWER_ORDER = {
+    "llama3.2:3b": 0, "qwen3:4b": 1,
+    "moondream": 0, "qwen2.5vl:3b": 1,
+    "whisper:tiny": 0, "whisper:base": 1, "whisper:small": 2, "whisper:medium": 3,
+    "ocr:mobile": 0, "ocr:server": 1,
+    "docling": 0,
+}
+
 # Estado de la descarga en curso (patrón análogo a get_install_status).
 _pull_status: dict = {"status": "idle", "model": None, "error": None}
 
@@ -603,8 +615,8 @@ def list_models() -> list[dict]:
     """Catálogo de modelos para el panel: instalados y no instalados.
 
     Cada item: {id, manager, category, label, sizeBytes, installed, active, protected, deletable}.
-    Cubre Ollama (LLM/visión), Whisper (audio), OCR y Docling. Orden: instalados
-    primero. Protegidos = modelo activo o de respaldo (no se pueden eliminar)."""
+    Cubre Ollama (LLM/visión), Whisper (audio), OCR y Docling. Orden: por tipo y
+    potencia. Protegidos = modelo activo o de respaldo (no se pueden eliminar)."""
     installed = _installed_models()
     active = _active_model_norms()
     fallback = _norm_model(_FALLBACK_VISION_MODEL)
@@ -652,8 +664,12 @@ def list_models() -> list[dict]:
     out.extend(_ocr_models())
     out.extend(_docling_models())
 
-    # Orden: instalados primero; dentro, por categoría y etiqueta.
-    out.sort(key=lambda x: (not x["installed"], x["category"], x["label"]))
+    # Orden: por tipo y, dentro de cada tipo, por potencia (ligero -> potente).
+    out.sort(key=lambda x: (
+        _CATEGORY_ORDER.get(x["category"], 99),
+        _POWER_ORDER.get(x["id"], 99),
+        x["label"],
+    ))
     return out
 
 
