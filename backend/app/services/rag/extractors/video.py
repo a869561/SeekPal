@@ -111,6 +111,12 @@ class VideoExtractor(BaseExtractor):
                     # brief=True: prompt de una frase + num_predict=96 para acotar el
                     # coste de generación en frames numerosos (coste de prefill fijo).
                     cap = caption_image(frame, brief=True)
+                    # Reintento único si el modelo devuelve vacío: el primer caption
+                    # de la sesión a menudo sale vacío por el arranque en frío del
+                    # modelo de visión (mismo patrón que en imágenes sueltas). Sin
+                    # esto, un vídeo corto podía quedar sin captions → "empty text".
+                    if not cap:
+                        cap = caption_image(frame, brief=True)
                     if cap:
                         captions.append(f"[{_timestamp(i, interval)}] {cap}")
                 if captions:

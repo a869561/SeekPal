@@ -180,6 +180,15 @@ async def restart(force: bool = False):
             "data": {"ingestions": active_ingestions},
         })
 
+    # Una descarga de modelo en curso también se cortaría al reiniciar (es
+    # reanudable, pero el usuario debería confirmar). force=True la ignora.
+    if system_service.get_pull_status()["status"] == "pulling" and not force:
+        return JSONResponse(status_code=409, content={
+            "success": False,
+            "message": "Hay una descarga de modelo en curso",
+            "data": {"pulling": True},
+        })
+
     system_service.restart_app()
     return ok({"status": "restarting"})
 

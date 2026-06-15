@@ -96,8 +96,9 @@ export default function ModelsCard() {
         {models.map((m) => (
           <div
             key={m.id}
-            className="flex items-center justify-between gap-3 p-3 rounded-xl border border-slate-100 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-700/20"
+            className="p-3 rounded-xl border border-slate-100 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-700/20"
           >
+          <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{m.label}</span>
@@ -164,6 +165,10 @@ export default function ModelsCard() {
                 </button>
               )}
             </div>
+          </div>
+            {confirmDel === m.id && m.deleteNote && (
+              <p className="mt-2 text-[11px] text-warning">{m.deleteNote}</p>
+            )}
           </div>
         ))}
       </div>

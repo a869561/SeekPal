@@ -580,6 +580,15 @@ def _docling_models() -> list[dict]:
         "sizeBytes": 2_000_000_000,  # ~2 GB (torch + transformers + modelos), estimado
         "installed": inst, "active": active,
         "protected": active, "deletable": inst and not active,
+        # Eliminar Docling hace `pip uninstall docling`, que NO quita sus
+        # dependencias pesadas (torch + transformers, ~2 GB): solo libera el
+        # paquete docling (decenas de MB). El tamaño de arriba es el coste de
+        # instalación, no lo que se recupera al borrar.
+        "deleteNote": (
+            "Eliminar solo desinstala el paquete Docling; las dependencias "
+            "pesadas (torch, transformers; ~2 GB) permanecen porque pueden "
+            "estar compartidas. Libera poco espacio."
+        ),
     }]
 
 

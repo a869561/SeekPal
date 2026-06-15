@@ -159,7 +159,10 @@ class GenerationService:
         interno antes de responder, mejorando la calidad en preguntas complejas
         a costa de mayor latencia (~2-5 s extra en CPU).
         """
-        options: dict = {"temperature": 0.2, "num_ctx": 8192}
+        # num_predict acota la generación: evita que un modelo razonador (o uno
+        # que se enrosca) genere una respuesta interminable y agote el timeout.
+        # 1024 tokens dan de sobra para una respuesta RAG con citas.
+        options: dict = {"temperature": 0.2, "num_ctx": 8192, "num_predict": 1024}
         # `think` es un parámetro de primer nivel de chat() (NO va en options, donde
         # Ollama lo ignora). Solo se pasa cuando el modo está activo; con modelos no
         # razonadores (llama3.2) no aplica y con el modo OFF se deja el default.
