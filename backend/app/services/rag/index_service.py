@@ -31,6 +31,24 @@ def _extractor_name(extractor: BaseExtractor) -> str:
     return extractor.__class__.__name__.removesuffix("Extractor").lower()
 
 
+def _rescue_chunk(file_name: str, path_context: str) -> Chunk:
+    """Chunk mínimo para ficheros sin texto extraíble.
+
+    El snippet (.text) es el nombre del fichero —lo más útil que mostrar de un
+    fichero sin contenido—; el contexto de ruta va en .context para que el
+    embedding (denso+sparse) incluya también las carpetas. Así un tráiler sin
+    habla o una foto sin caption sigue siendo recuperable por su nombre/ruta.
+    """
+    return Chunk(
+        text=file_name,
+        chunk_idx=0,
+        offset_start=0,
+        offset_end=len(file_name),
+        page=None,
+        context=path_context,
+    )
+
+
 @dataclass(slots=True)
 class IndexResult:
     status: str
@@ -175,8 +193,14 @@ class IndexService:
                                 extractor=ext_name, error=f"extraction: {exc}")
 
         if not doc.text.strip():
+            # Sin texto extraíble (p.ej. un tráiler que es música sin habla, o una
+            # foto cuyo captioning no produjo nada). En vez de omitir el fichero
+            # —dejándolo invisible incluso buscando su nombre— creamos un chunk
+            # mínimo de rescate con el nombre y el contexto de ruta. Así el
+            # fichero sigue siendo recuperable por su nombre/carpetas.
+            rescue = _rescue_chunk(file_name, path_context)
             return PreparedFile(file_id, source_id, file_name, category, extension,
-                                extractor=ext_name, error="empty text")
+                                chunks=[rescue], extractor=ext_name, error="empty text (rescued by name)")
 
         chunks = chunk_text(doc, self._chunk_size, self._overlap)
         if not chunks:
