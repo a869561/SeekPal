@@ -528,8 +528,10 @@ async def _index_text_documents(
     # Ollama solo puede tener un modelo cargado; sin este flush el LLM puede
     # ocupar la VRAM cuando moondream intenta cargarse.
     if any(f.category == "image" for f in files):
-        from app.services.rag.image_service import flush_llm_for_captioning
+        from app.services.rag.image_service import flush_llm_for_captioning, warm_ocr
         await flush_llm_for_captioning()
+        # Cargar el OCR ahora, no dentro del timeout de 30 s de la primera imagen.
+        await asyncio.to_thread(warm_ocr)
 
     for group_start in range(0, total, _INDEX_GROUP):
         group = files[group_start : group_start + _INDEX_GROUP]

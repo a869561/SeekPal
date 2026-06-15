@@ -151,6 +151,61 @@ def test_sanitize_caption_keeps_normal_caption():
 
 
 # ---------------------------------------------------------------------------
+# OCR: serialización (RapidOCR no es thread-safe) y warm-up
+# ---------------------------------------------------------------------------
+
+def test_ocr_image_serializes_concurrent_calls(monkeypatch):
+    """Varias llamadas OCR a la vez no se solapan: el lock las serializa.
+
+    Regresión: sin el lock, el motor RapidOCR compartido se corrompía en
+    concurrencia y todas las imágenes menos una devolvían texto vacío.
+    """
+    import threading
+    import time
+    from app.services.rag import image_service
+
+    state = {"cur": 0, "max": 0}
+    slock = threading.Lock()
+
+    class FakeEngine:
+        def __call__(self, _img):
+            with slock:
+                state["cur"] += 1
+                state["max"] = max(state["max"], state["cur"])
+            time.sleep(0.02)
+            with slock:
+                state["cur"] -= 1
+            return ([[None, "hola", 0.9]], None)
+
+    monkeypatch.setattr(image_service, "_ocr", types.SimpleNamespace(get=lambda: FakeEngine()))
+    monkeypatch.setattr("PIL.Image.open",
+                        lambda _p: types.SimpleNamespace(convert=lambda _m: "img"))
+    monkeypatch.setattr("numpy.array", lambda x: x)
+
+    threads = [threading.Thread(target=image_service.ocr_image, args=(Path("/x.png"),))
+               for _ in range(6)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert state["max"] == 1, f"OCR se solapó (máx concurrencia {state['max']})"
+
+
+def test_warm_ocr_loads_engine(monkeypatch):
+    """warm_ocr fuerza la carga del motor (fuera del timeout por imagen)."""
+    from app.services.rag import image_service
+
+    called = {"n": 0}
+    monkeypatch.setattr(
+        image_service, "_ocr",
+        types.SimpleNamespace(get=lambda: called.__setitem__("n", called["n"] + 1)),
+    )
+    image_service.warm_ocr()
+    assert called["n"] == 1
+
+
+# ---------------------------------------------------------------------------
 # VideoExtractor
 # ---------------------------------------------------------------------------
 

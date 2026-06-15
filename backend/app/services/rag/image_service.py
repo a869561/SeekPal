@@ -194,6 +194,11 @@ _ocr = LazyService("OCR", _load_ocr)
 _caption = LazyService("Captioning", _load_caption_client)
 _caption_errors = 0  # errores de modelo/imagen (no conexion); >=5 desactiva
 _caption_lock = threading.Semaphore(1)  # solo un captioning a la vez en Ollama
+# El motor RapidOCR (sesión ONNX compartida) NO es seguro para llamadas
+# concurrentes: durante la ingesta varias imágenes corren en paralelo y, sin
+# serializar, todas menos una devolvían texto vacío (se perdía el OCR de, p. ej.,
+# rangos.png). Un lock por inferencia lo resuelve; el OCR es rápido en CPU.
+_ocr_lock = threading.Lock()
 
 # Registrar modelos lazy para que get_model_status() los incluya
 from app.services.rag._lazy import register as _register  # noqa: E402
@@ -224,6 +229,16 @@ def _image_bytes_for_ollama(path: Path) -> bytes:
     return path.read_bytes()
 
 
+def warm_ocr() -> None:
+    """Carga anticipada del motor OCR.
+
+    La carga en frío (modelos server ~140 MB la primera vez) puede superar el
+    timeout de 30 s que extract_image_text_async aplica al OCR de cada imagen.
+    Llamar a esto antes de la fase de imágenes mueve ese coste fuera del timeout
+    por imagen, evitando que las primeras imágenes pierdan el OCR. Idempotente."""
+    _ocr.get()
+
+
 def ocr_image(path: Path) -> str:
     """Extrae texto de una imagen via OCR. Devuelve "" si no hay texto detectado.
 
@@ -238,7 +253,8 @@ def ocr_image(path: Path) -> str:
         import numpy as np
         from PIL import Image
         img = np.array(Image.open(path).convert("RGB"))
-        result, _ = engine(img)
+        with _ocr_lock:  # serializa: RapidOCR no es seguro en concurrencia
+            result, _ = engine(img)
         if not result:
             return ""
         return " ".join(item[1] for item in result if item and len(item) >= 2 and item[1])
@@ -435,7 +451,10 @@ async def extract_image_text_async(path: Path) -> str:
     nunca se marca como error solo por lentitud del modelo de visión.
 
     Timeouts:
-      - OCR: 30s (asyncio.wait_for — operación de hilo puro, sin timeout propio)
+      - OCR: 120s. El OCR está serializado (_ocr_lock), así que este margen
+        cubre tanto la inferencia (rápida en CPU) como la cola de imágenes
+        concurrentes esperando el lock; con 30s las últimas de un lote grande
+        agotaban el tiempo esperando turno y perdían el OCR.
       - Caption: el AsyncClient ya tiene timeout=150s para la llamada a Ollama.
         No se envuelve caption_image_async con wait_for porque el semáforo puede
         esperar legítimamente mientras otra imagen está siendo captionada — ese
@@ -445,7 +464,7 @@ async def extract_image_text_async(path: Path) -> str:
     async def _ocr_task() -> str:
         try:
             return await asyncio.wait_for(
-                asyncio.to_thread(ocr_image, path), timeout=30.0,
+                asyncio.to_thread(ocr_image, path), timeout=120.0,
             )
         except Exception:  # noqa: BLE001
             return ""
