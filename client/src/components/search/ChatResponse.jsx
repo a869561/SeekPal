@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { Bot, Loader2 } from "lucide-react";
 import CitationCard from "./CitationCard.jsx";
+import LoadingSpinner from "../ui/LoadingSpinner.jsx";
 
 function renderWithCitations(text, citations) {
   const map = {};
@@ -26,6 +27,12 @@ function renderWithCitations(text, citations) {
 export default function ChatResponse({ citations, text, loading }) {
   const { t } = useTranslation();
 
+  // Carga inicial (antes de que llegue el primer token): mismo círculo limpio
+  // que el modo búsqueda, en vez de la caja vacía con texto.
+  if (loading && !text) {
+    return <LoadingSpinner label={t("ask.loading")} />;
+  }
+
   return (
     <div className="space-y-4">
       {/* Primero la respuesta del modelo */}
@@ -40,11 +47,7 @@ export default function ChatResponse({ citations, text, loading }) {
           {loading && <Loader2 size={14} className="text-brand animate-spin ml-1" />}
         </div>
         <div className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap min-h-[2rem]">
-          {text
-            ? renderWithCitations(text, citations)
-            : loading
-              ? <span className="text-slate-400 dark:text-slate-500 italic">{t("ask.loading")}</span>
-              : null}
+          {text ? renderWithCitations(text, citations) : null}
         </div>
       </div>
 
