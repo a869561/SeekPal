@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2, CheckCircle, AlertCircle, Sparkles, Mic, Film, Layers, RefreshCw, FileText, Download, ScanText, Eye } from "lucide-react";
+import { Loader2, CheckCircle, AlertCircle, Sparkles, Mic, Film, Layers, RefreshCw, FileText, Download, ScanText, Eye, MessageSquare } from "lucide-react";
 import { getSettings, saveSettings } from "../../api/settings.js";
 import {
   restartApp, invalidateHardwareCache,
@@ -24,6 +24,13 @@ const VISION_MODELS = [
   { id: "moondream",    labelKey: "ragSettings.visionModelMoondream" },
 ];
 
+// LLM de respuestas. llama3.2:3b corre en CPU (PC sin gráfica); qwen3:4b da
+// mejor calidad pero requiere GPU/RAM (en 4 GB se satura y agota el timeout).
+const LLM_MODELS = [
+  { id: "llama3.2:3b", labelKey: "ragSettings.llmModelLlama" },
+  { id: "qwen3:4b",    labelKey: "ragSettings.llmModelQwen" },
+];
+
 // Valores por defecto para campos que el servidor puede devolver como null.
 // Deben coincidir con los ?? fallbacks del JSX para que el formulario no
 // marque un campo como "cambiado" solo por hacer click en él.
@@ -37,12 +44,13 @@ const FIELD_DEFAULTS = {
   ocrQuality: "mobile",
   visionModel: "qwen2.5vl:3b",
   autoFreePreviousVisionModel: false,
+  llmModel: "llama3.2:3b",
 };
 
 // Campos que requieren reiniciar el backend para entrar en efecto
 const RESTART_FIELDS = new Set([
   "rerankerEnabled", "whisperModel", "useDocling", "indexMultimedia",
-  "videoFrameInterval", "videoMaxFrames", "ocrQuality", "visionModel",
+  "videoFrameInterval", "videoMaxFrames", "ocrQuality", "visionModel", "llmModel",
 ]);
 
 export default function RagSettingsCard() {
@@ -198,6 +206,28 @@ export default function RagSettingsCard() {
             disabled={busy}
           />
         </div>
+      </div>
+
+      {/* Modelo LLM de respuestas (conmutable: CPU vs GPU) */}
+      <div className="mb-5">
+        <label className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">
+          <MessageSquare size={13} /> {t("ragSettings.llmModel")}
+        </label>
+        <p className="text-xs text-slate-400 dark:text-slate-500 mb-2 ml-5">
+          {t("ragSettings.llmModelHint")}
+        </p>
+        <select
+          value={form.llmModel || "llama3.2:3b"}
+          disabled={busy}
+          onChange={(e) => update("llmModel", e.target.value)}
+          className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand/50 disabled:opacity-50"
+        >
+          {LLM_MODELS.map((m) => (
+            <option key={m.id} value={m.id}>
+              {t(m.labelKey)}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Docling — PDFs estructurados (opt-in, ~2 GB) */}

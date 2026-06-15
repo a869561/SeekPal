@@ -17,6 +17,7 @@ class SettingsPatch(BaseModel):
     # RAG / multimedia (requieren reinicio para que entren en efecto)
     rerankerEnabled: bool | None = None
     whisperModel: WhisperModel | None = None
+    llmModel: str | None = None
     useDocling: bool | None = None
     indexMultimedia: bool | None = None
     videoFrameInterval: int | None = Field(default=None, ge=1, le=600)

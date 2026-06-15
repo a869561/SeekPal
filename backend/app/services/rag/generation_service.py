@@ -136,7 +136,9 @@ async def _think_filter(
 
 class GenerationService:
     def __init__(self, base_url: str, model: str, thinking: bool = False):
-        self._client = AsyncClient(host=base_url, timeout=120.0)
+        # 300 s: en hardware lento (CPU / GPU pequeña) un LLM grande puede tardar
+        # bastante; un timeout corto convertía respuestas lentas en errores.
+        self._client = AsyncClient(host=base_url, timeout=300.0)
         self._model = model
         self._thinking = thinking
         if thinking:
@@ -158,8 +160,10 @@ class GenerationService:
         a costa de mayor latencia (~2-5 s extra en CPU).
         """
         options: dict = {"temperature": 0.2, "num_ctx": 8192}
-        if self._thinking:
-            options["think"] = True  # Activar thinking en Ollama (Qwen3/DeepSeek-R1)
+        # `think` es un parámetro de primer nivel de chat() (NO va en options, donde
+        # Ollama lo ignora). Solo se pasa cuando el modo está activo; con modelos no
+        # razonadores (llama3.2) no aplica y con el modo OFF se deja el default.
+        chat_kwargs: dict = {"think": True} if self._thinking else {}
 
         prompt = build_prompt(question, chunks)
         messages = [{"role": "user", "content": prompt}]
@@ -170,6 +174,7 @@ class GenerationService:
                 messages=messages,
                 stream=True,
                 options=options,
+                **chat_kwargs,
             ):
                 # Ollama >= 0.9 puede exponer el thinking en campo separado;
                 # lo envolvemos en etiquetas para que _think_filter lo procese

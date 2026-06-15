@@ -102,7 +102,8 @@ async def ask(body: AskRequest, request: Request):
             yield {"data": json.dumps({
                 "type": "error",
                 "code": RagErrorCode.GENERATION_FAILED.value,
-                "message": str(exc),
+                # str(exc) de un httpx.ReadTimeout viene vacío; garantizar mensaje.
+                "message": str(exc) or f"{type(exc).__name__} (¿modelo LLM demasiado pesado para este hardware?)",
             })}
 
     return EventSourceResponse(event_stream())

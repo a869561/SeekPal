@@ -416,7 +416,8 @@ _FALLBACK_VISION_MODEL = "moondream"
 _MODEL_CATALOG: list[dict] = [
     {"id": "qwen2.5vl:3b", "category": "vision", "label": "Visión · calidad"},
     {"id": "moondream",    "category": "vision", "label": "Visión · ligero (respaldo)"},
-    {"id": "qwen3:4b",     "category": "llm",    "label": "LLM (respuestas)"},
+    {"id": "llama3.2:3b",  "category": "llm",    "label": "LLM · ligero (CPU/sin gráfica)"},
+    {"id": "qwen3:4b",     "category": "llm",    "label": "LLM · calidad (requiere GPU/RAM)"},
 ]
 
 # Estado de la descarga en curso (patrón análogo a get_install_status).
@@ -464,7 +465,9 @@ def _installed_models() -> dict[str, tuple[str, int | None]]:
 def _active_model_norms() -> set[str]:
     from app.core import runtime_settings
     from app.core.config import settings
-    active = {_norm_model(settings.llm_model)}
+    # LLM y visión activos según runtime_settings (lo que de verdad se usa),
+    # con fallback al estático de .env. Se usan para proteger de borrado.
+    active = {_norm_model(runtime_settings.get("llmModel", settings.llm_model))}
     vm = runtime_settings.get("visionModel")
     if vm:
         active.add(_norm_model(vm))
@@ -677,12 +680,14 @@ def free_vision_model(model_id: str) -> None:
     check de 'active' de runtime_settings (aún apunta al modelo viejo). Protege el
     respaldo (moondream) y el LLM activo. Fallo no crítico."""
     from app.core.config import settings
+    from app.core import runtime_settings
     from app.services import scanner_service
     # Nunca borrar durante una ingesta: el captioning podría estar usando el
     # modelo anterior justo ahora (el cambio de modelo solo se aplica al reiniciar).
     if scanner_service.is_ingesting():
         return
-    protected = {_norm_model(_FALLBACK_VISION_MODEL), _norm_model(settings.llm_model)}
+    llm = runtime_settings.get("llmModel", settings.llm_model)
+    protected = {_norm_model(_FALLBACK_VISION_MODEL), _norm_model(llm)}
     if _norm_model(model_id) in protected:
         return
     try:

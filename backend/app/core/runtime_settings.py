@@ -25,6 +25,7 @@ from typing import Any
 _defaults: dict[str, Any] = {
     "rerankerEnabled": True,
     "whisperModel": "small",
+    "llmModel": os.getenv("LLM_MODEL", "llama3.2:3b"),
     "useDocling": False,
     "indexMultimedia": True,
     "videoFrameInterval": 30,
@@ -32,7 +33,6 @@ _defaults: dict[str, Any] = {
     "ocrQuality": "mobile",
     "visionModel": os.getenv("SEEKPAL_VISION_MODEL", "moondream"),
     "autoFreePreviousVisionModel": False,
-    "visionModel": os.getenv("SEEKPAL_VISION_MODEL", "moondream"),
 }
 
 _settings: dict[str, Any] = dict(_defaults)

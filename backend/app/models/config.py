@@ -25,6 +25,10 @@ class UserSettings(BaseModel):
     # y Whisper se cargan una vez por sesion).
     rerankerEnabled: bool = True
     whisperModel: WhisperModel = "small"
+    # LLM de respuestas (/api/ask). Default llama3.2:3b: usable en CPU / PC sin
+    # gráfica dedicada (~11 s en esta máquina). En hardware potente se puede
+    # cambiar a qwen3:4b (mejor calidad) desde Ajustes. Conmutable → reinicio.
+    llmModel: str = "llama3.2:3b"
 
     # PDFs estructurados (Docling). Default OFF porque requiere ~2 GB de
     # dependencias (torch + transformers + modelos) — se instala on-demand
