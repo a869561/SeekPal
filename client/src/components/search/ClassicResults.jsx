@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { FileText, Image, Music, Film, File, ChevronLeft, ChevronRight } from "lucide-react";
+import { FileText, Image, Music, Film, File, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import CategoryBadge from "../ui/CategoryBadge.jsx";
 
 function formatSize(b) {
@@ -79,6 +79,18 @@ function FileResultCard({ file }) {
 
 export default function ClassicResults({ results, loading, submitted, page, setPage }) {
   const { t } = useTranslation();
+
+  // Carga inicial (aún no hay resultados): círculo de carga centrado,
+  // igual que en el modo pregunta, para indicar que se está procesando.
+  if (loading && !results) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 py-16 text-slate-400 dark:text-slate-500">
+        <Loader2 size={28} className="text-brand animate-spin" />
+        <span className="text-sm">{t("search.searching")}</span>
+      </div>
+    );
+  }
+
   return (
     <div className={`space-y-2 transition-opacity duration-150 ${loading ? "opacity-50" : "opacity-100"}`}>
       {results?.files?.length === 0 ? (

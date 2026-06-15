@@ -4,8 +4,8 @@ import { useTranslation } from "react-i18next";
 export default function CitationCard({ citation, index }) {
   const { t } = useTranslation();
   return (
-    <div className="flex items-start gap-2.5 p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
-      <div className="flex-shrink-0 w-5 h-5 rounded-full bg-brand-soft flex items-center justify-center mt-0.5">
+    <div className="flex items-center gap-2.5 p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
+      <div className="flex-shrink-0 w-5 h-5 rounded-full bg-brand-soft flex items-center justify-center">
         <span className="text-[10px] font-bold text-brand">{index + 1}</span>
       </div>
       <div className="min-w-0 flex-1">
@@ -22,9 +22,6 @@ export default function CitationCard({ citation, index }) {
             {(citation.score * 100).toFixed(0)}%
           </span>
         </div>
-        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">
-          {citation.snippet}
-        </p>
       </div>
     </div>
   );
