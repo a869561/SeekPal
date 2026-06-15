@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 import threading
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -63,6 +64,40 @@ _CAPTION_PROMPT_RETRY = (
 _CAPTION_PROMPT_FRAME = (
     "En una frase, describe brevemente lo que muestra este fotograma de vídeo."
 )
+
+# Tokens de plantilla de chat (ChatML y similares) que algunos VLM pequeños
+# emiten como contenido cuando degeneran: "<|im_start|>", "<|im_end|>", "<|endoftext|>"…
+_SPECIAL_TOKEN_RE = re.compile(r"<\|[^>]*\|>")
+
+
+def _sanitize_caption(text: str) -> str:
+    """Limpia y valida la salida del modelo de visión.
+
+    Los VLM pequeños como qwen2.5vl (formato ChatML) a veces degeneran y emiten
+    sus propios tokens de plantilla ("<|im_start|>") como contenido, o repiten una
+    palabra en bucle. Sin filtrar, eso se indexaba tal cual ("Descripcion:
+    <|im_start|> <|im_start|>…") y contaminaba la búsqueda. Aquí se eliminan esos
+    tokens; si lo que queda no es una descripción real (vacío o degenerado por
+    repetición), se devuelve "" para que actúe el retry / OCR / rescate por nombre
+    en vez de indexar basura.
+    """
+    if not text:
+        return ""
+    cleaned = " ".join(_SPECIAL_TOKEN_RE.sub(" ", text).split())
+    # ¿Queda texto real (alguna letra o dígito, no solo símbolos)?
+    if not re.search(r"[^\W_]", cleaned):
+        return ""
+    words = cleaned.split()
+    # Una descripción real es una frase de varias palabras. Rechazamos one-liners
+    # degenerados como "!!!IMAGES!!!" o tokens sueltos (otra forma en que los VLM
+    # pequeños "fallan" devolviendo un marcador en vez de describir).
+    letter_words = [w for w in words if re.search(r"[^\W\d_]", w)]
+    if len(letter_words) < 3:
+        return ""
+    # Degeneración por repetición: muchas palabras pero casi todas iguales.
+    if len(words) >= 8 and len({w.lower() for w in words}) <= 2:
+        return ""
+    return cleaned
 
 
 def _ensure_server_models() -> "tuple[Path, Path] | None":
@@ -251,7 +286,7 @@ def caption_image(path: Path, brief: bool = False) -> str:
                 options={"temperature": 0.2, "num_ctx": 2048, "num_gpu": _VISION_NUM_GPU, "num_predict": num_predict},
             )
             _caption_errors = 0
-            return (resp.message.content or "").strip()
+            return _sanitize_caption(resp.message.content or "")
         except Exception as exc:  # noqa: BLE001
             msg = str(exc).lower()
 
@@ -359,7 +394,7 @@ async def caption_image_async(path: Path, retry: bool = False) -> str:
                 options={"temperature": 0.2, "num_ctx": 2048, "num_gpu": _VISION_NUM_GPU, "num_predict": 220},
             )
             _caption_errors = 0
-            return (resp.message.content or "").strip()
+            return _sanitize_caption(resp.message.content or "")
         except asyncio.CancelledError:
             raise  # propagar: el semáforo ya se liberó en __aexit__
         except Exception as exc:  # noqa: BLE001

@@ -107,6 +107,50 @@ def test_extract_image_text_handles_both_empty():
 
 
 # ---------------------------------------------------------------------------
+# _sanitize_caption: rechazo de salidas degeneradas del VLM
+# ---------------------------------------------------------------------------
+
+def test_sanitize_caption_rejects_special_token_spam():
+    """qwen2.5vl degenera y emite '<|im_start|>' en bucle -> se descarta como vacío."""
+    from app.services.rag.image_service import _sanitize_caption
+
+    garbage = "<|im_start|> " * 30
+    assert _sanitize_caption(garbage) == ""
+
+
+def test_sanitize_caption_strips_tokens_keeps_real_text():
+    """Si hay texto real mezclado con tokens, se conserva el texto sin los tokens."""
+    from app.services.rag.image_service import _sanitize_caption
+
+    mixed = "<|im_start|> Una captura de los rangos de Valorant <|im_end|>"
+    out = _sanitize_caption(mixed)
+    assert "im_start" not in out and "im_end" not in out
+    assert "rangos de Valorant" in out
+
+
+def test_sanitize_caption_rejects_placeholder_oneliner():
+    """Salidas degeneradas tipo '!!!IMAGES!!!' (token suelto) se descartan."""
+    from app.services.rag.image_service import _sanitize_caption
+
+    assert _sanitize_caption("!!!IMAGES!!!") == ""
+
+
+def test_sanitize_caption_rejects_repetition_loop():
+    """Una palabra repetida en bucle no es una descripción válida."""
+    from app.services.rag.image_service import _sanitize_caption
+
+    assert _sanitize_caption("rango " * 12) == ""
+
+
+def test_sanitize_caption_keeps_normal_caption():
+    """Un caption normal pasa intacto (salvo normalización de espacios)."""
+    from app.services.rag.image_service import _sanitize_caption
+
+    cap = "Una fotografía de un gato negro sentado en un sofá."
+    assert _sanitize_caption(cap) == cap
+
+
+# ---------------------------------------------------------------------------
 # VideoExtractor
 # ---------------------------------------------------------------------------
 
