@@ -265,6 +265,10 @@
     "empty":      "Sin ficheros",
     "page":       "Página {{page}} de {{pages}}",
     "words":      "{{count}} palabras",
+    "open":       "Abrir fichero",
+    "opening":    "Abriendo fichero…",
+    "notFound":   "El fichero ya no existe en esa ruta",
+    "openError":  "No se pudo abrir el fichero",
     "columns": {
       "name":     "Nombre",
       "category": "Categoría",

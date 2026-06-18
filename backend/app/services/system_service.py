@@ -83,6 +83,49 @@ async def pick_folder(timeout: float = 120.0) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Apertura de ficheros en el SO (resultados de búsqueda y citas)
+# ---------------------------------------------------------------------------
+
+def _open_path_sync(path: str) -> None:
+    """Abre un fichero con la aplicación por defecto del SO."""
+    system = platform.system()
+    if system == "Windows":
+        os.startfile(path)  # noqa: S606 — ruta de un FileDoc indexado y verificada
+    elif system == "Darwin":
+        subprocess.run(["open", path], check=True)
+    else:
+        subprocess.run(["xdg-open", path], check=True)
+
+
+async def open_file(file_id: str) -> str:
+    """Abre en el SO local el fichero asociado a un FileDoc indexado.
+
+    Se abre por file_id (no por una ruta enviada por el cliente) para abrir
+    únicamente ficheros que SeekPal tiene indexados, nunca rutas arbitrarias.
+    Devuelve la ruta abierta. Lanza ValueError si el id es inválido y
+    FileNotFoundError si el FileDoc o el fichero en disco ya no existen.
+    """
+    from beanie import PydanticObjectId
+
+    from app.models.file import FileDoc
+
+    try:
+        oid = PydanticObjectId(file_id)
+    except Exception as exc:  # noqa: BLE001 — id malformado
+        raise ValueError(f"file_id inválido: {file_id}") from exc
+
+    doc = await FileDoc.get(oid)
+    if doc is None:
+        raise FileNotFoundError("El fichero no está indexado")
+
+    if not Path(doc.path).exists():
+        raise FileNotFoundError(doc.path)
+
+    await asyncio.to_thread(_open_path_sync, doc.path)
+    return doc.path
+
+
+# ---------------------------------------------------------------------------
 # Detección de hardware
 # ---------------------------------------------------------------------------
 

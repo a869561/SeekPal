@@ -265,6 +265,10 @@
     "empty":      "No files",
     "page":       "Page {{page}} of {{pages}}",
     "words":      "{{count}} words",
+    "open":       "Open file",
+    "opening":    "Opening file…",
+    "notFound":   "The file no longer exists at that path",
+    "openError":  "Could not open the file",
     "columns": {
       "name":     "Name",
       "category": "Category",

@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { FileText, Image, Music, Film, File, ChevronLeft, ChevronRight } from "lucide-react";
+import { FileText, Image, Music, Film, File, ChevronLeft, ChevronRight, ExternalLink, Loader2 } from "lucide-react";
 import CategoryBadge from "../ui/CategoryBadge.jsx";
 import LoadingSpinner from "../ui/LoadingSpinner.jsx";
 import { relevancePct } from "../../utils/relevance.js";
+import { openIndexedFile } from "../../utils/openFile.js";
 
 function formatSize(b) {
   if (b == null) return "";
@@ -50,9 +52,27 @@ function FileResultCard({ file }) {
   const s = CAT_STYLE[file.category] || CAT_STYLE.other;
   const Icon = s.icon;
   const hasRelevance = file._relevanceScore != null;
+  const [opening, setOpening] = useState(false);
+
+  const handleOpen = async () => {
+    if (opening) return;
+    setOpening(true);
+    try {
+      await openIndexedFile(file._id, t);
+    } finally {
+      setOpening(false);
+    }
+  };
 
   return (
-    <div className="flex items-start gap-4 p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl hover:border-brand/40 transition-colors">
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={handleOpen}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleOpen(); } }}
+      title={t("files.open")}
+      className="group flex items-start gap-4 p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl hover:border-brand/40 hover:bg-slate-50/50 dark:hover:bg-slate-700/30 cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+    >
       <div className={`flex-shrink-0 p-2.5 rounded-lg ${s.bg}`}>
         <Icon size={20} className={s.iconCls} />
       </div>
@@ -62,14 +82,24 @@ function FileResultCard({ file }) {
           <CategoryBadge category={file.category} className="flex-shrink-0">
             {t(`files.categories.${file.category}`, { defaultValue: file.category })}
           </CategoryBadge>
-          {hasRelevance && (
-            <span
-              className="text-xs text-slate-400 dark:text-slate-500 ml-auto flex-shrink-0 tabular-nums"
-              title={t("search.relevance")}
-            >
-              {relevancePct(file._relevanceScore)}%
-            </span>
-          )}
+          <span className="ml-auto flex items-center gap-2 flex-shrink-0">
+            {hasRelevance && (
+              <span
+                className="text-xs text-slate-400 dark:text-slate-500 tabular-nums"
+                title={t("search.relevance")}
+              >
+                {relevancePct(file._relevanceScore)}%
+              </span>
+            )}
+            {opening ? (
+              <Loader2 size={15} className="text-brand animate-spin" />
+            ) : (
+              <ExternalLink
+                size={15}
+                className="text-slate-300 dark:text-slate-600 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity"
+              />
+            )}
+          </span>
         </div>
         <div className="text-xs text-slate-400 dark:text-slate-500 font-mono truncate mt-0.5">{file.path}</div>
         <div className="flex items-center gap-2 mt-1 text-xs text-slate-500 dark:text-slate-400">

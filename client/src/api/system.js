@@ -32,6 +32,11 @@ export const setProvider = (provider) =>
 export const restartApp = (force = false) =>
   api.post(`/system/restart${force ? "?force=true" : ""}`).then((r) => r.data);
 
+// Abre un fichero indexado (resultado de búsqueda o cita) con la app por
+// defecto del SO. Se pasa el file_id, no la ruta.
+export const openFile = (fileId) =>
+  api.post("/system/open-file", { file_id: fileId }).then((r) => r.data.data);
+
 export const getDoclingStatus = () =>
   api.get("/system/docling-status").then((r) => r.data.data);
 

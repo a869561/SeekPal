@@ -15,6 +15,10 @@ class ModelActionRequest(BaseModel):
     model: str
 
 
+class OpenFileRequest(BaseModel):
+    file_id: str
+
+
 router = APIRouter(prefix="/api/system", tags=["system"], dependencies=[Depends(require_auth)])
 
 
@@ -24,6 +28,23 @@ async def folder_picker():
         path = await system_service.pick_folder()
     except Exception as exc:
         raise APIError("Error abriendo diálogo", status_code=500) from exc
+    return ok({"path": path})
+
+
+@router.post("/open-file")
+async def open_file(body: OpenFileRequest):
+    """Abre en el SO local el fichero de un resultado de búsqueda o una cita.
+
+    Recibe el file_id (no la ruta) para abrir solo ficheros indexados.
+    """
+    try:
+        path = await system_service.open_file(body.file_id)
+    except ValueError as exc:
+        raise APIError(str(exc), status_code=400) from exc
+    except FileNotFoundError as exc:
+        raise APIError("El fichero ya no existe en esa ruta", status_code=404) from exc
+    except Exception as exc:
+        raise APIError("No se pudo abrir el fichero", status_code=500) from exc
     return ok({"path": path})
 
 
