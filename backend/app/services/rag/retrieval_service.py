@@ -142,7 +142,7 @@ class RetrievalService:
         vector: VectorService,
         reranker: RerankerService | None = None,
         reranker_multiplier: int = 3,
-        reranker_min_score: float | None = None,
+        reranker_keep_margin: float | None = None,
         mmr_enabled: bool = True,
         mmr_lambda: float = 0.7,
     ):
@@ -151,7 +151,7 @@ class RetrievalService:
         self._vector = vector
         self._reranker = reranker
         self._reranker_multiplier = max(1, reranker_multiplier)
-        self._reranker_min_score = reranker_min_score
+        self._reranker_keep_margin = reranker_keep_margin
         self._mmr_enabled = mmr_enabled
         self._mmr_lambda = max(0.0, min(1.0, mmr_lambda))
 
@@ -189,12 +189,18 @@ class RetrievalService:
                     chunk.score = float(new_score)
                 candidates.sort(key=lambda c: c.score, reverse=True)
 
-                # Suelo de relevancia: descarta la cola irrelevante (scores del
-                # reranker comparables entre si). Conserva siempre >=1 para no
-                # devolver vacio cuando hay un mejor candidato aunque sea debil.
-                if self._reranker_min_score is not None:
-                    kept = [c for c in candidates if c.score >= self._reranker_min_score]
-                    candidates = kept if kept else candidates[:1]
+                # Suelo RELATIVO de relevancia. Un umbral absoluto es frágil: los
+                # logits del cross-encoder no están calibrados en escala fija, así
+                # que el mismo nivel de relevancia puntúa distinto según la consulta
+                # (p.ej. una consulta en español contra texto en inglés cae ~1 punto
+                # y caería entera por debajo de un suelo fijo). En su lugar
+                # conservamos los candidatos cercanos al mejor: se adapta por
+                # consulta, mantiene el clúster relevante y descarta la cola.
+                # candidates ya viene ordenado desc, así que [0] es el top y el
+                # propio top siempre se conserva (>=1 resultado garantizado).
+                if self._reranker_keep_margin is not None and candidates:
+                    cutoff = candidates[0].score - self._reranker_keep_margin
+                    candidates = [c for c in candidates if c.score >= cutoff]
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Reranker fallo, usando scores hybrid: %s", exc)
 

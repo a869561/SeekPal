@@ -42,15 +42,17 @@ class Settings(BaseSettings):
     # latencia de cada query en GPUs modestas; el RRF ya ordena lo bastante
     # bien como para que los relevantes esten en los primeros top_k*2.
     rag_reranker_multiplier: int = 2
-    # Suelo de relevancia: tras el rerank se descartan candidatos cuyo score
-    # quede por debajo de este umbral, evitando alimentar al LLM con relleno
-    # irrelevante en queries sin buen match. Calibracion empirica con
-    # jina-reranker-v2 sobre corpus mixto ES/EN: documentos claramente
-    # relevantes puntuan entre -0.04 y +1.5 (queries españolas tienden a
-    # logits bajos), asi que 0.0 podaba resultados correctos ('propuesta TFG'
-    # perdia 1 de 2). -1.0 conserva esos y sigue cortando el relleno profundo.
-    # Siempre se conserva al menos 1 resultado. Solo aplica con reranker activo.
-    rag_reranker_min_score: float = -1.0
+    # Suelo RELATIVO de relevancia: tras el rerank se conservan los candidatos
+    # cuyo score quede como mucho a `keep_margin` por debajo del mejor, y se
+    # descarta la cola. Sustituye al antiguo umbral absoluto (-1.0), que era
+    # frágil: los logits de jina-reranker-v2 no están calibrados en escala fija,
+    # así que una misma relevancia puntúa distinto según la consulta (las queries
+    # en español contra texto en inglés caían ~1 punto y la consulta entera podía
+    # quedar por debajo del suelo, colapsando a 1 solo chunk débil). Un margen
+    # relativo se adapta por consulta: mantiene el clúster relevante (p.ej. ambos
+    # juegos en 'fauna marina') y corta la cola (p.ej. la mezcla irrelevante en
+    # consultas con buen match). Siempre se conserva >=1. Solo con reranker activo.
+    rag_reranker_keep_margin: float = 1.2
 
     # MMR (Maximum Marginal Relevance): tras retrieval+rerank, reordena el
     # top_k para diversificar — evita que sean todos del mismo fichero.
@@ -59,11 +61,13 @@ class Settings(BaseSettings):
     rag_mmr_enabled: bool = True
     rag_mmr_lambda: float = 0.7
 
-    # Multi-query expansion: el LLM genera N reformulaciones de la pregunta
-    # (sinonimos, distintos angulos) que se usan para recuperar candidatos
-    # adicionales antes de RRF-fusionar. Mejora recall@k en corpus grandes.
-    # n=3 genera 3 variantes + la pregunta original = 4 queries en total.
-    rag_multi_query_enabled: bool = True
+    # Multi-query expansion: el LLM genera N reformulaciones de la pregunta antes
+    # de RRF-fusionar. DESACTIVADA por defecto: la mini-evaluación (docs/decisiones/
+    # 0010 y docs/eval/multiquery_resultados.txt) mostró que NO aporta recall sobre
+    # este pipeline (híbrido e5+BM25 + reranker ya aciertan en rango 1 en 5/5
+    # consultas) y a cambio rompe el determinismo (solo 2/5 deterministas), inyecta
+    # ruido y añade una llamada al LLM + 3 recuperaciones. Reversible: poner True.
+    rag_multi_query_enabled: bool = False
     rag_multi_query_n: int = 3
 
     # Thinking mode (Qwen3 / DeepSeek-R1): el LLM genera razonamiento extendido
