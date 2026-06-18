@@ -489,6 +489,40 @@ def _ollama_client():
     return Client(host=_OLLAMA_URL)
 
 
+# Cache de capabilities por sesión: evita llamar a show() en cada render del panel.
+_caps_cache: dict[str, list[str]] = {}
+
+
+def ollama_capabilities(model_id: str) -> list[str]:
+    """Capabilities que Ollama declara para un modelo (p. ej. ['completion','vision']).
+
+    Cacheado por nombre normalizado. Devuelve [] si Ollama no está o el modelo no
+    las reporta (modelos antiguos)."""
+    norm = _norm_model(model_id)
+    if norm in _caps_cache:
+        return _caps_cache[norm]
+    caps: list[str] = []
+    try:
+        resp = _ollama_client().show(model_id)
+        caps = list(getattr(resp, "capabilities", None) or [])
+    except Exception:
+        caps = []
+    _caps_cache[norm] = caps
+    return caps
+
+
+def categorize_ollama(model_id: str) -> str:
+    """Clasifica un modelo Ollama en 'vision' | 'llm' | 'otro' según sus capabilities."""
+    caps = ollama_capabilities(model_id)
+    if "vision" in caps:
+        return "vision"
+    if "embedding" in caps:
+        return "otro"  # modelo de embeddings: no usable como LLM de respuestas
+    if caps:  # completion / chat / tools / insert ...
+        return "llm"
+    return "otro"  # desconocido (Ollama caído o sin capabilities) → etiqueta manual
+
+
 def _installed_models() -> dict[str, tuple[str, int | None]]:
     """{nombre_normalizado: (nombre_real, tamaño_bytes)} de lo instalado en Ollama.
 
@@ -691,10 +725,11 @@ def list_models() -> list[dict]:
             continue
         is_active = nid in active
         protected = is_active or nid == fallback
+        category = categorize_ollama(real)
         out.append({
             "id": real,
             "manager": "ollama",
-            "category": "otro",
+            "category": category,
             "label": real,
             "sizeBytes": size,
             "installed": True,
