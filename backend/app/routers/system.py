@@ -225,9 +225,10 @@ async def list_models():
 
 @router.post("/models/pull")
 async def pull_model(body: ModelActionRequest, background_tasks: BackgroundTasks):
-    """Descarga un modelo del catálogo en background. Sondear /models/pull-status."""
-    if not system_service.is_known_model(body.model):
-        raise APIError(f"Modelo no reconocido: {body.model}", status_code=400)
+    """Descarga un modelo en background (catálogo o Ollama arbitrario por nombre).
+    Sondear /models/pull-status."""
+    if not system_service.is_valid_model_id(body.model):
+        raise APIError(f"Nombre de modelo no válido: {body.model}", status_code=400)
     if system_service.get_pull_status()["status"] == "pulling":
         raise APIError("Ya hay una descarga en progreso", status_code=409)
     background_tasks.add_task(system_service.pull_model, body.model)

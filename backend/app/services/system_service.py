@@ -11,6 +11,7 @@ import asyncio
 import json
 import os
 import platform
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -523,6 +524,17 @@ def categorize_ollama(model_id: str) -> str:
     return "otro"  # desconocido (Ollama caído o sin capabilities) → etiqueta manual
 
 
+_MODEL_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,200}$")
+
+
+def is_valid_model_id(model_id: str) -> bool:
+    """True si el id tiene formato razonable de modelo (Ollama o repo HF).
+
+    No comprueba existencia: el pull dirá si Ollama no lo encuentra. Solo evita
+    cadenas vacías, espacios o caracteres de shell."""
+    return bool(model_id) and bool(_MODEL_ID_RE.match(model_id))
+
+
 def _installed_models() -> dict[str, tuple[str, int | None]]:
     """{nombre_normalizado: (nombre_real, tamaño_bytes)} de lo instalado en Ollama.
 
@@ -564,9 +576,10 @@ def _active_model_norms() -> set[str]:
 
 
 # ── Whisper (faster-whisper) — modelos en la caché de HuggingFace ──────────
-_WHISPER_SIZES = ["tiny", "base", "small", "medium"]
+_WHISPER_SIZES = ["tiny", "base", "small", "medium", "large-v3"]
 _WHISPER_SIZE_HINT = {  # tamaño aprox. para mostrar antes de instalar
-    "tiny": 75_000_000, "base": 145_000_000, "small": 488_000_000, "medium": 1_530_000_000,
+    "tiny": 75_000_000, "base": 145_000_000, "small": 488_000_000,
+    "medium": 1_530_000_000, "large-v3": 3_090_000_000,
 }
 
 
@@ -821,12 +834,14 @@ def _install_sync(item: dict) -> None:
 
 
 async def pull_model(model_id: str) -> None:
-    """Descarga/instala un modelo (cualquier manager) en background."""
+    """Descarga/instala un modelo (cualquier manager) en background.
+
+    Si el modelo no está en el catálogo ni instalado, se asume un `ollama pull`
+    por nombre (el usuario lo escribió en 'instalar por nombre')."""
     global _pull_status
     item = _find_item(model_id)
     if item is None:
-        _pull_status = {"status": "error", "model": model_id, "error": "Modelo desconocido"}
-        return
+        item = {"manager": "ollama", "id": model_id}
     _pull_status = {"status": "pulling", "model": model_id, "error": None}
     try:
         await asyncio.to_thread(_install_sync, item)

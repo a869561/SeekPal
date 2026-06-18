@@ -41,3 +41,18 @@ def test_capabilities_are_cached():
         ss.ollama_capabilities("llama3.2:3b")
         ss.ollama_capabilities("llama3.2:3b")
         assert client.show.call_count == 1
+
+
+def test_is_valid_model_id_accepts_ollama_and_hf_ids():
+    assert ss.is_valid_model_id("gemma3:4b")
+    assert ss.is_valid_model_id("Systran/faster-whisper-large-v3")
+
+
+def test_is_valid_model_id_rejects_blank_and_spaces():
+    assert not ss.is_valid_model_id("")
+    assert not ss.is_valid_model_id("rm -rf /")
+
+
+def test_whisper_large_is_listed():
+    ids = {m["id"] for m in ss._whisper_models()}
+    assert "whisper:large-v3" in ids
