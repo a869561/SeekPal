@@ -20,24 +20,12 @@ const WHISPER_MODELS = [
   { id: "medium", sizeMB: 769,  note: "Mejor calidad, mas lento" },
 ];
 
-const VISION_MODELS = [
-  { id: "qwen2.5vl:3b", labelKey: "ragSettings.visionModelQwen" },
-  { id: "moondream",    labelKey: "ragSettings.visionModelMoondream" },
-];
-
-// LLM de respuestas. llama3.2:3b corre en CPU (PC sin gráfica); qwen3:4b da
-// mejor calidad pero requiere GPU/RAM (en 4 GB se satura y agota el timeout).
-const LLM_MODELS = [
-  { id: "llama3.2:3b", labelKey: "ragSettings.llmModelLlama" },
-  { id: "qwen3:4b",    labelKey: "ragSettings.llmModelQwen" },
-];
-
 // Valores por defecto para campos que el servidor puede devolver como null.
 // Deben coincidir con los ?? fallbacks del JSX para que el formulario no
 // marque un campo como "cambiado" solo por hacer click en él.
 const FIELD_DEFAULTS = {
   rerankerEnabled: true,
-  whisperModel: "base",
+  whisperModel: "small",
   useDocling: false,
   indexMultimedia: true,
   videoFrameInterval: 30,
@@ -143,6 +131,8 @@ export default function RagSettingsCard() {
   };
   const llmOptions = optionsFor("llm", form.llmModel);
   const visionOptions = optionsFor("vision", form.visionModel);
+  const visionModelInfo = installed.find((m) => m.id === form.visionModel);
+  const visionLacksCapability = !!visionModelInfo && visionModelInfo.category !== "vision";
 
   const handleApply = async () => {
     setState("saving");
@@ -347,6 +337,9 @@ export default function RagSettingsCard() {
         </select>
         {visionOptions.length === 0 && (
           <p className="text-[11px] text-slate-400 mt-1">{t("ragSettings.noInstalledModels")}</p>
+        )}
+        {visionLacksCapability && (
+          <p className="text-[11px] text-warning mt-1">{t("ragSettings.visionNoVisionWarning")}</p>
         )}
 
         {/* Liberar el modelo anterior al cambiar (gestión de disco, opt-in) */}

@@ -850,9 +850,3 @@ async def pull_model(model_id: str) -> None:
         _pull_status = {"status": "error", "model": model_id, "error": str(exc)}
 
 
-def is_known_model(model_id: str) -> bool:
-    """True si el modelo está en el catálogo o ya instalado (evita pulls arbitrarios)."""
-    return any(
-        m["id"] == model_id or _norm_model(m["id"]) == _norm_model(model_id)
-        for m in list_models()
-    )

@@ -48,8 +48,7 @@
     "installByNamePlaceholder": "p. ej. gemma3:4b",
     "installByNameHint": "Escribe el nombre exacto de un modelo de Ollama y pulsa Instalar.",
     "exploreOllama": "Explorar modelos de Ollama",
-    "exploreHf": "Explorar modelos de voz (Hugging Face)",
-    "realIdLabel": "ID"
+    "exploreHf": "Explorar modelos de voz (Hugging Face)"
   },
   "ragSettings": {
     "title":                "Búsqueda y multimedia",
@@ -71,11 +70,7 @@
     "visionModelHint":      "Genera una descripción de cada imagen (y de los fotogramas de vídeo) para poder encontrarlas por su contenido.",
     "llmModel":             "Modelo de respuestas (LLM)",
     "llmModelHint":         "El que redacta las respuestas en /preguntar. llama3.2 funciona en PCs sin gráfica; qwen3 da mejor calidad pero necesita GPU/RAM.",
-    "llmModelLlama":        "llama3.2:3b — Ligero, funciona en CPU (sin gráfica)",
-    "llmModelQwen":         "qwen3:4b — Mejor calidad (requiere GPU/RAM)",
     "visionModel":          "Modelo de descripción de imágenes",
-    "visionModelQwen":      "qwen2.5vl:3b — Mejor calidad (más lento)",
-    "visionModelMoondream": "moondream — Más rápido (peor calidad)",
     "autoFreeVision":       "Liberar el modelo anterior al cambiar",
     "autoFreeVisionHint":   "Al cambiar de modelo de descripción, desinstala el anterior para ahorrar disco. Tendrás que volver a descargarlo (~GB) si vuelves a él. Nunca se elimina el modelo de respaldo (moondream). Desactivado por defecto.",
     "frameInterval":        "Intervalo de frames (vídeo)",

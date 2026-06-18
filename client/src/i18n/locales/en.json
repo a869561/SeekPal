@@ -48,8 +48,7 @@
     "installByNamePlaceholder": "e.g. gemma3:4b",
     "installByNameHint": "Type the exact name of an Ollama model and click Install.",
     "exploreOllama": "Browse Ollama models",
-    "exploreHf": "Browse voice models (Hugging Face)",
-    "realIdLabel": "ID"
+    "exploreHf": "Browse voice models (Hugging Face)"
   },
   "ragSettings": {
     "title":                "Search and multimedia",
@@ -71,11 +70,7 @@
     "visionModelHint":      "Generates a description of each image (and of video frames) so they can be found by their content.",
     "llmModel":             "Answer model (LLM)",
     "llmModelHint":         "The one that writes answers in /ask. llama3.2 runs on GPU-less PCs; qwen3 gives better quality but needs GPU/RAM.",
-    "llmModelLlama":        "llama3.2:3b — Lightweight, runs on CPU (no GPU)",
-    "llmModelQwen":         "qwen3:4b — Better quality (requires GPU/RAM)",
     "visionModel":          "Image description model",
-    "visionModelQwen":      "qwen2.5vl:3b — Better quality (slower)",
-    "visionModelMoondream": "moondream — Faster (lower quality)",
     "autoFreeVision":       "Free the previous model when switching",
     "autoFreeVisionHint":   "When you change the description model, uninstall the previous one to save disk. You'll have to download it again (~GB) if you switch back. The fallback model (moondream) is never removed. Off by default.",
     "frameInterval":        "Frame interval (video)",
