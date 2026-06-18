@@ -2,7 +2,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.models.config import OcrQuality, VisionModel, WhisperModel
+from app.models.config import OcrQuality
 
 
 class AddSourceRequest(BaseModel):
@@ -16,12 +16,12 @@ class SettingsPatch(BaseModel):
     language: Literal["es", "en"] | None = None
     # RAG / multimedia (requieren reinicio para que entren en efecto)
     rerankerEnabled: bool | None = None
-    whisperModel: WhisperModel | None = None
+    whisperModel: str | None = None
     llmModel: str | None = None
     useDocling: bool | None = None
     indexMultimedia: bool | None = None
     videoFrameInterval: int | None = Field(default=None, ge=1, le=600)
     videoMaxFrames: int | None = Field(default=None, ge=1, le=500)
     ocrQuality: OcrQuality | None = None
-    visionModel: VisionModel | None = None
+    visionModel: str | None = None
     autoFreePreviousVisionModel: bool | None = None

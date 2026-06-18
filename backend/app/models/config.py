@@ -6,9 +6,7 @@ from beanie.odm.actions import Replace, Save, SaveChanges, Update
 from pydantic import BaseModel, Field
 
 
-WhisperModel = Literal["tiny", "base", "small", "medium", "large"]
-OcrQuality   = Literal["mobile", "server"]
-VisionModel  = Literal["qwen2.5vl:3b", "moondream"]
+OcrQuality = Literal["mobile", "server"]
 
 
 def _now_utc() -> datetime:
@@ -24,7 +22,7 @@ class UserSettings(BaseModel):
     # RAG — leidos al iniciar el backend. Cambios requieren reinicio (el reranker
     # y Whisper se cargan una vez por sesion).
     rerankerEnabled: bool = True
-    whisperModel: WhisperModel = "small"
+    whisperModel: str = "small"
     # LLM de respuestas (/api/ask). Default llama3.2:3b: usable en CPU / PC sin
     # gráfica dedicada (~11 s en esta máquina). En hardware potente se puede
     # cambiar a qwen3:4b (mejor calidad) desde Ajustes. Conmutable → reinicio.
@@ -41,7 +39,7 @@ class UserSettings(BaseModel):
     videoFrameInterval: int = Field(default=30, ge=1, le=600)
     videoMaxFrames: int = Field(default=20, ge=1, le=500)
     ocrQuality: OcrQuality = "mobile"  # mobile=rápido (~15 MB) | server=preciso (~140 MB)
-    visionModel: VisionModel = "qwen2.5vl:3b"  # qwen2.5vl:3b=mejor calidad (default) | moondream=más rápido
+    visionModel: str = "qwen2.5vl:3b"  # default qwen2.5vl:3b; admite cualquier modelo de visión Ollama
     # Al cambiar de modelo de visión, desinstalar el anterior para ahorrar disco.
     # Por defecto OFF: cambiar a menudo no debe re-descargar GB cada vez. Nunca
     # toca el modelo de respaldo (moondream) ni el LLM activo.
