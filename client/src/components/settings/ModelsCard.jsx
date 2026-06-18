@@ -26,6 +26,7 @@ export default function ModelsCard() {
   const [pulling, setPulling] = useState(null); // id del modelo descargándose
   const [confirmDel, setConfirmDel] = useState(null); // id pendiente de confirmar
   const [busy, setBusy] = useState(false);
+  const [customName, setCustomName] = useState("");
 
   const load = async () => {
     try {
@@ -58,6 +59,18 @@ export default function ModelsCard() {
     try {
       await pullModel(id);
       setPulling(id);
+    } catch { /* ignore */ }
+    finally { setBusy(false); }
+  };
+
+  const handleInstallCustom = async () => {
+    const name = customName.trim();
+    if (!name) return;
+    setBusy(true);
+    try {
+      await pullModel(name);
+      setPulling(name);
+      setCustomName("");
     } catch { /* ignore */ }
     finally { setBusy(false); }
   };
@@ -119,6 +132,9 @@ export default function ModelsCard() {
                   <span className="text-[10px] text-slate-400">{t("modelsCard.notInstalled")}</span>
                 )}
               </div>
+              {m.label !== m.id && (
+                <div className="text-[11px] font-mono text-slate-400 dark:text-slate-500 truncate">{m.id}</div>
+              )}
               {m.sizeBytes && (
                 <div className="text-[11px] text-slate-400 dark:text-slate-500">
                   {m.installed ? "" : "~"}{formatSize(m.sizeBytes)}
@@ -180,6 +196,36 @@ export default function ModelsCard() {
           </div>
           );
         })}
+      </div>
+
+      <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-700/60">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">
+          {t("modelsCard.installByName")}
+        </p>
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={customName}
+            onChange={(e) => setCustomName(e.target.value)}
+            placeholder={t("modelsCard.installByNamePlaceholder")}
+            disabled={busy || !!pulling}
+            className="flex-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand/50 disabled:opacity-50"
+          />
+          <button
+            onClick={handleInstallCustom}
+            disabled={busy || !!pulling || !customName.trim()}
+            className="inline-flex items-center gap-1 text-xs px-3 py-2 rounded-lg bg-brand text-white hover:bg-brand/90 disabled:opacity-50"
+          >
+            <Download size={12} /> {t("modelsCard.install")}
+          </button>
+        </div>
+        <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5">{t("modelsCard.installByNameHint")}</p>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
+          <a href="https://ollama.com/search" target="_blank" rel="noopener noreferrer"
+             className="text-[11px] text-brand hover:underline">{t("modelsCard.exploreOllama")} ↗</a>
+          <a href="https://huggingface.co/models?search=faster-whisper" target="_blank" rel="noopener noreferrer"
+             className="text-[11px] text-brand hover:underline">{t("modelsCard.exploreHf")} ↗</a>
+        </div>
       </div>
     </div>
   );

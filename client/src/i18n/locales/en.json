@@ -43,7 +43,13 @@
     "catAudio":      "Audio transcription",
     "catOcr":        "OCR (text in images)",
     "catPdf":        "Structured PDFs",
-    "catOther":      "Other / unused"
+    "catOther":      "Other / unused",
+    "installByName": "Install by name",
+    "installByNamePlaceholder": "e.g. gemma3:4b",
+    "installByNameHint": "Type the exact name of an Ollama model and click Install.",
+    "exploreOllama": "Browse Ollama models",
+    "exploreHf": "Browse voice models (Hugging Face)",
+    "realIdLabel": "ID"
   },
   "ragSettings": {
     "title":                "Search and multimedia",
