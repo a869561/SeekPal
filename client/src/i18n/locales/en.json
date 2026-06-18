@@ -87,7 +87,10 @@
     "restarting":           "Restarting...",
     "done":                 "Settings applied",
     "error":                "Error saving settings",
-    "ingestPending":        "Saved. Will apply when the current ingestion finishes (not restarting so it isn't interrupted)."
+    "ingestPending":        "Saved. Will apply when the current ingestion finishes (not restarting so it isn't interrupted).",
+    "whisperCustomHint": "Pick a size or type a Hugging Face repo (CTranslate2 format).",
+    "visionNoVisionWarning": "This model does not declare vision capability; it may fail to describe images.",
+    "noInstalledModels": "No installed models of this type. Install them under \"Models & storage\"."
   },
   "hardware": {
     "title":          "Detected components",

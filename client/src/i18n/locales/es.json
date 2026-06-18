@@ -87,7 +87,10 @@
     "restarting":           "Reiniciando…",
     "done":                 "Ajustes aplicados",
     "error":                "Error al guardar los ajustes",
-    "ingestPending":        "Guardado. Se aplicará al terminar la ingesta en curso (no se reinicia para no cortarla)."
+    "ingestPending":        "Guardado. Se aplicará al terminar la ingesta en curso (no se reinicia para no cortarla).",
+    "whisperCustomHint": "Elige un tamaño o escribe un repositorio de Hugging Face (formato CTranslate2).",
+    "visionNoVisionWarning": "Este modelo no declara capacidad de visión; podría fallar al describir imágenes.",
+    "noInstalledModels": "No hay modelos instalados de este tipo. Instálalos en «Modelos y almacenamiento»."
   },
   "hardware": {
     "title":          "Componentes detectados",

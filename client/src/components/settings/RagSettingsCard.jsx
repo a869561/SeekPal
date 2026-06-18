@@ -5,7 +5,7 @@ import { getSettings, saveSettings } from "../../api/settings.js";
 import InfoHint from "../ui/InfoHint.jsx";
 import {
   restartApp, invalidateHardwareCache,
-  getDoclingStatus, installDocling,
+  getDoclingStatus, installDocling, getModels,
 } from "../../api/system.js";
 
 const OCR_QUALITY_OPTIONS = [
@@ -61,6 +61,8 @@ export default function RagSettingsCard() {
   const [loading, setLoading] = useState(true);
   const [state, setState] = useState("idle"); // idle | saving | restarting | done | error
 
+  const [installed, setInstalled] = useState([]);
+
   // Estado de la instalacion de Docling (separado del flujo de guardado RAG)
   const [doclingInstalled, setDoclingInstalled] = useState(false);
   const [doclingState, setDoclingState] = useState("idle"); // idle | installing | done | error
@@ -79,6 +81,10 @@ export default function RagSettingsCard() {
       try {
         const ds = await getDoclingStatus();
         setDoclingInstalled(!!ds.installed);
+      } catch { /* ignore */ }
+      try {
+        const ms = await getModels();
+        setInstalled(ms.filter((m) => m.installed));
       } catch { /* ignore */ }
       finally { setLoading(false); }
     })();
@@ -129,6 +135,14 @@ export default function RagSettingsCard() {
   const hasChanges = changedFields.length > 0;
   const needsRestart = changedFields.some((k) => RESTART_FIELDS.has(k));
   const busy = state === "saving" || state === "restarting";
+
+  const optionsFor = (category, current) => {
+    const ids = installed.filter((m) => m.category === category).map((m) => m.id);
+    if (current && !ids.includes(current)) ids.unshift(current);
+    return ids;
+  };
+  const llmOptions = optionsFor("llm", form.llmModel);
+  const visionOptions = optionsFor("vision", form.visionModel);
 
   const handleApply = async () => {
     setState("saving");
@@ -210,10 +224,8 @@ export default function RagSettingsCard() {
           onChange={(e) => update("llmModel", e.target.value)}
           className="w-full mt-2 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand/50 disabled:opacity-50"
         >
-          {LLM_MODELS.map((m) => (
-            <option key={m.id} value={m.id}>
-              {t(m.labelKey)}
-            </option>
+          {llmOptions.map((id) => (
+            <option key={id} value={id}>{id}</option>
           ))}
         </select>
       </div>
@@ -304,18 +316,20 @@ export default function RagSettingsCard() {
       {/* Modelo Whisper */}
       <div className="mb-5">
         <OptionHeader icon={Mic} title={t("ragSettings.whisperModel")} hint={t("ragSettings.whisperModelHint")} />
-        <select
+        <input
+          list="whisper-options"
           value={form.whisperModel || "small"}
           disabled={busy || !(form.indexMultimedia ?? true)}
           onChange={(e) => update("whisperModel", e.target.value)}
           className="w-full mt-2 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand/50 disabled:opacity-50"
-        >
+        />
+        <datalist id="whisper-options">
           {WHISPER_MODELS.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.id} ({m.sizeMB} MB) — {m.note}
-            </option>
+            <option key={m.id} value={m.id}>{m.id} ({m.sizeMB} MB) — {m.note}</option>
           ))}
-        </select>
+          <option value="large-v3">large-v3 (~3 GB)</option>
+        </datalist>
+        <p className="text-[11px] text-slate-400 mt-1">{t("ragSettings.whisperCustomHint")}</p>
       </div>
 
       {/* Modelo de visión (captioning de imágenes) */}
@@ -327,12 +341,13 @@ export default function RagSettingsCard() {
           onChange={(e) => update("visionModel", e.target.value)}
           className="w-full mt-2 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand/50 disabled:opacity-50"
         >
-          {VISION_MODELS.map((m) => (
-            <option key={m.id} value={m.id}>
-              {t(m.labelKey)}
-            </option>
+          {visionOptions.map((id) => (
+            <option key={id} value={id}>{id}</option>
           ))}
         </select>
+        {visionOptions.length === 0 && (
+          <p className="text-[11px] text-slate-400 mt-1">{t("ragSettings.noInstalledModels")}</p>
+        )}
 
         {/* Liberar el modelo anterior al cambiar (gestión de disco, opt-in) */}
         <div className="flex items-center justify-between gap-3 mt-3">
