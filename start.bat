@@ -115,9 +115,21 @@ if errorlevel 1 (
 )
 powershell -noprofile -c "try{Invoke-WebRequest http://localhost:11434/api/version -UseBasicParsing|Out-Null;exit 0}catch{exit 1}" >nul 2>&1
 if errorlevel 1 (
-    start "" /B ollama serve >nul 2>&1
-    timeout /t 5 /nobreak >nul
+    REM Ventana propia ^(sin /B^): Ollama sobrevive aunque se cierre esta ventana de
+    REM arranque. Con /B moria al cerrar el lanzador y provocaba el
+    REM "All connection attempts failed" al generar respuestas.
+    start "SeekPal Ollama" /MIN ollama serve
 )
+REM Esperar a que Ollama responda de verdad ^(hasta ~30 s^) en vez de un timeout fijo.
+set "_ot=0"
+:waitollama
+powershell -noprofile -c "try{Invoke-WebRequest http://localhost:11434/api/version -UseBasicParsing|Out-Null;exit 0}catch{exit 1}" >nul 2>&1
+if not errorlevel 1 goto ollamaup
+set /a _ot=!_ot!+1
+if !_ot! geq 15 goto ollamaup
+timeout /t 2 /nobreak >nul
+goto waitollama
+:ollamaup
 set "_flag=%~dp0backend\.models_pulled_v3"
 if not exist "%_flag%" (
     echo.
