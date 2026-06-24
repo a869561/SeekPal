@@ -135,8 +135,8 @@ async def connect_database() -> None:
     _generation_service = GenerationService(
         base_url=settings.ollama_url,
         # LLM conmutable desde Ajustes (runtime_settings tiene prioridad sobre el
-        # estatico de .env). Default usable en CPU/PC sin gráfica (llama3.2:3b);
-        # en hardware potente el usuario puede elegir qwen3:4b.
+        # estatico de .env). Default gemma3:4b (multimodal, funciona en CPU);
+        # llama3.2:3b queda como alternativa más ligera.
         model=runtime_settings.get("llmModel", settings.llm_model),
         thinking=settings.rag_thinking_enabled,
     )

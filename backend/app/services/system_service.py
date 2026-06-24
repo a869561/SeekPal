@@ -461,11 +461,13 @@ _FALLBACK_VISION_MODEL = "moondream"
 # así que no se repite el tipo en el nombre. sizeHint = peso aproximado de la
 # descarga (Ollama no expone el tamaño hasta instalarlo); se muestra con "~" para
 # que no quede ningún modelo del catálogo sin tamaño.
+# gemma3:4b es multimodal (texto+visión), de ahí sus dos categorías cuando aún no
+# está instalado; una vez instalado, las categorías reales salen de sus capabilities.
 _MODEL_CATALOG: list[dict] = [
-    {"id": "qwen2.5vl:3b", "category": "vision", "label": "qwen2.5vl:3b", "sizeHint": 3_200_000_000},
-    {"id": "moondream",    "category": "vision", "label": "moondream",    "sizeHint": 1_700_000_000},
-    {"id": "llama3.2:3b",  "category": "llm",    "label": "llama3.2:3b",  "sizeHint": 2_000_000_000},
-    {"id": "qwen3:4b",     "category": "llm",    "label": "qwen3:4b",     "sizeHint": 2_600_000_000},
+    {"id": "qwen2.5vl:3b", "category": "vision",          "label": "qwen2.5vl:3b", "sizeHint": 3_200_000_000},
+    {"id": "moondream",    "category": "vision",          "label": "moondream",    "sizeHint": 1_700_000_000},
+    {"id": "gemma3:4b",    "category": ["llm", "vision"], "label": "gemma3:4b",    "sizeHint": 3_300_000_000},
+    {"id": "llama3.2:3b",  "category": "llm",             "label": "llama3.2:3b",  "sizeHint": 2_000_000_000},
 ]
 
 # Orden del panel de modelos: primero por tipo, luego por potencia (de ligero a
@@ -473,7 +475,7 @@ _MODEL_CATALOG: list[dict] = [
 # dejaba un modelo suelto arriba (p. ej. Audio small) y el resto al fondo.
 _CATEGORY_ORDER = {"llm": 0, "vision": 1, "audio": 2, "ocr": 3, "pdf": 4, "otro": 5}
 _POWER_ORDER = {
-    "llama3.2:3b": 0, "qwen3:4b": 1,
+    "llama3.2:3b": 0, "gemma3:4b": 1,
     "moondream": 0, "qwen2.5vl:3b": 1,
     "whisper:tiny": 0, "whisper:base": 1, "whisper:small": 2, "whisper:medium": 3,
     "ocr:mobile": 0, "ocr:server": 1,
@@ -519,16 +521,22 @@ def ollama_capabilities(model_id: str) -> list[str]:
     return caps
 
 
-def categorize_ollama(model_id: str) -> str:
-    """Clasifica un modelo Ollama en 'vision' | 'llm' | 'otro' según sus capabilities."""
+def categorize_ollama(model_id: str) -> list[str]:
+    """Clasifica un modelo Ollama en TODAS las categorías para las que sirve, según
+    sus capabilities. Un modelo multimodal (texto+visión, p. ej. gemma3) pertenece a
+    varias, así que se devuelve la lista completa para que aparezca en todos los
+    desplegables donde es usable (respuestas y visión). Al instalar no se sabe el
+    propósito, de modo que es el usuario quien lo elige en cada apartado."""
     caps = ollama_capabilities(model_id)
+    cats: list[str] = []
     if "vision" in caps:
-        return "vision"
-    if "embedding" in caps:
-        return "otro"  # modelo de embeddings: no usable como LLM de respuestas
-    if caps:  # completion / chat / tools / insert ...
-        return "llm"
-    return "otro"  # desconocido (Ollama caído o sin capabilities) → etiqueta manual
+        cats.append("vision")
+    if "completion" in caps and "embedding" not in caps:
+        cats.append("llm")
+    if not cats:
+        # embeddings, desconocidos o sin capabilities: no usable como respuestas ni visión
+        return ["otro"]
+    return cats
 
 
 _MODEL_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,200}$")
@@ -580,6 +588,20 @@ def _active_model_norms() -> set[str]:
     if vm:
         active.add(_norm_model(vm))
     return active
+
+
+def _active_llm_norm() -> str:
+    """Norm del modelo de respuestas activo (lo que de verdad usa /api/ask)."""
+    from app.core import runtime_settings
+    from app.core.config import settings
+    return _norm_model(runtime_settings.get("llmModel", settings.llm_model))
+
+
+def _active_vision_norm() -> str | None:
+    """Norm del modelo de visión activo, o None si no hay."""
+    from app.core import runtime_settings
+    vm = runtime_settings.get("visionModel")
+    return _norm_model(vm) if vm else None
 
 
 # ── Whisper (faster-whisper) — modelos en la caché de HuggingFace ──────────
@@ -715,48 +737,60 @@ def list_models() -> list[dict]:
     Cubre Ollama (LLM/visión), Whisper (audio), OCR y Docling. Orden: por tipo y
     potencia. Protegidos = modelo activo o de respaldo (no se pueden eliminar)."""
     installed = _installed_models()
-    active = _active_model_norms()
+    active_all = _active_model_norms()
+    active_llm = _active_llm_norm()
+    active_vision = _active_vision_norm()
     fallback = _norm_model(_FALLBACK_VISION_MODEL)
+
+    def _active_in_role(nid: str, category: str) -> bool:
+        # "Activo" es por rol: un multimodal puede ser el LLM de respuestas sin ser
+        # el modelo de visión, así que solo se marca activo en la categoría que ocupa.
+        if category == "llm":
+            return nid == active_llm
+        if category == "vision":
+            return nid == active_vision
+        return nid in active_all
 
     out: list[dict] = []
     seen: set[str] = set()
+
+    def _emit(real_id: str, label: str, categories: list[str], size, is_inst: bool):
+        nid = _norm_model(real_id)
+        # Protegido = en uso en CUALQUIER rol o modelo de respaldo. El borrado es
+        # global (un solo modelo), así que no se puede eliminar desde ninguna tarjeta.
+        protected = (nid in active_all) or (nid == fallback)
+        for category in categories:
+            out.append({
+                "id": real_id,
+                "manager": "ollama",
+                "category": category,
+                "label": label,
+                "sizeBytes": size,
+                "installed": is_inst,
+                "active": _active_in_role(nid, category),
+                "protected": protected,
+                "deletable": is_inst and not protected,
+            })
+
     for entry in _MODEL_CATALOG:
         nid = _norm_model(entry["id"])
         seen.add(nid)
         real, size = installed.get(nid, (None, None))
         is_inst = real is not None
-        is_active = nid in active
-        protected = is_active or nid == fallback
-        out.append({
-            "id": entry["id"],
-            "manager": "ollama",
-            "category": entry["category"],
-            "label": entry["label"],
-            "sizeBytes": size if is_inst else entry.get("sizeHint"),
-            "installed": is_inst,
-            "active": is_active,
-            "protected": protected,
-            "deletable": is_inst and not protected,
-        })
+        if is_inst:
+            # Instalado: las categorías reales salen de sus capabilities (multi-rol).
+            categories = categorize_ollama(real)
+        else:
+            cat = entry["category"]
+            categories = cat if isinstance(cat, list) else [cat]
+        _emit(entry["id"], entry["label"], categories,
+              size if is_inst else entry.get("sizeHint"), is_inst)
 
-    # Modelos instalados que no están en el catálogo (restos: bge-m3, llama3.2…).
+    # Modelos instalados que no están en el catálogo (restos: bge-m3, gemma3…).
     for nid, (real, size) in installed.items():
         if nid in seen:
             continue
-        is_active = nid in active
-        protected = is_active or nid == fallback
-        category = categorize_ollama(real)
-        out.append({
-            "id": real,
-            "manager": "ollama",
-            "category": category,
-            "label": real,
-            "sizeBytes": size,
-            "installed": True,
-            "active": is_active,
-            "protected": protected,
-            "deletable": not protected,
-        })
+        _emit(real, real, categorize_ollama(real), size, True)
 
     out.extend(_whisper_models())
     out.extend(_ocr_models())

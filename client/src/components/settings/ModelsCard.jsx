@@ -31,12 +31,20 @@ function apiErrorReason(err) {
 }
 
 const CATEGORY_KEY = {
+  aiModels: "modelsCard.aiModels",
   vision: "modelsCard.catVision",
   llm: "modelsCard.catLlm",
   audio: "modelsCard.catAudio",
   ocr: "modelsCard.catOcr",
   pdf: "modelsCard.catPdf",
   otro: "modelsCard.catOther",
+};
+
+// Etiqueta corta por capacidad, para los chips de cada modelo de IA.
+const TAG_KEY = {
+  llm: "modelsCard.tagLlm",
+  vision: "modelsCard.tagVision",
+  otro: "modelsCard.tagUnused",
 };
 
 export default function ModelsCard() {
@@ -155,10 +163,34 @@ export default function ModelsCard() {
   }
   if (!models) return null;
 
-  // Agrupar por categoría (vienen ya ordenados por tipo y potencia desde el
-  // backend) para mostrar secciones compactas en vez de una única lista larga.
-  const groups = [];
+  // Modelos de IA (Ollama: respuestas/visión/otro) en UNA fila por modelo, con
+  // etiquetas de para qué sirve. El backend emite un item por categoría (lo usan
+  // los desplegables de Ajustes); aquí se deduplican por id. Un multimodal como
+  // gemma3 sale una vez con dos etiquetas, no duplicado. Audio/OCR/PDF se quedan
+  // como secciones propias de un solo propósito.
+  const AI_CATS = new Set(["llm", "vision", "otro"]);
+  const CAT_RANK = { llm: 0, vision: 1, otro: 2 };
+  const aiMap = new Map();
+  const rest = [];
   for (const m of models) {
+    if (AI_CATS.has(m.category)) {
+      const cur = aiMap.get(m.id);
+      if (cur) {
+        if (!cur.cats.includes(m.category)) cur.cats.push(m.category);
+        cur.active = cur.active || m.active;
+      } else {
+        aiMap.set(m.id, { ...m, cats: [m.category] });
+      }
+    } else {
+      rest.push(m);
+    }
+  }
+  const aiModels = [...aiMap.values()];
+  for (const m of aiModels) m.cats.sort((a, b) => (CAT_RANK[a] ?? 9) - (CAT_RANK[b] ?? 9));
+
+  // aiModels como primera sección; el resto (audio/OCR/PDF) agrupado por categoría.
+  const groups = aiModels.length ? [{ category: "aiModels", items: aiModels }] : [];
+  for (const m of rest) {
     const last = groups[groups.length - 1];
     if (last && last.category === m.category) last.items.push(m);
     else groups.push({ category: m.category, items: [m] });
@@ -214,6 +246,22 @@ export default function ModelsCard() {
                           {m.installed ? "" : "~"}{formatSize(m.sizeBytes)}
                         </span>
                       ) : null}
+                      {m.cats && (
+                        <span className="flex items-center gap-1 shrink-0 ml-1">
+                          {m.cats.map((c) => (
+                            <span
+                              key={c}
+                              className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                                c === "otro"
+                                  ? "bg-slate-200/70 text-slate-500 dark:bg-slate-600/40 dark:text-slate-400"
+                                  : "bg-brand/10 text-brand dark:bg-brand/20"
+                              }`}
+                            >
+                              {t(TAG_KEY[c] || "modelsCard.catOther")}
+                            </span>
+                          ))}
+                        </span>
+                      )}
                     </div>
                     <div className="flex-shrink-0">
                       {!m.installed ? (

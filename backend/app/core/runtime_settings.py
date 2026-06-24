@@ -25,7 +25,7 @@ from typing import Any
 _defaults: dict[str, Any] = {
     "rerankerEnabled": True,
     "whisperModel": "small",
-    "llmModel": os.getenv("LLM_MODEL", "llama3.2:3b"),
+    "llmModel": os.getenv("LLM_MODEL", "gemma3:4b"),
     "useDocling": False,
     "indexMultimedia": True,
     "videoFrameInterval": 30,

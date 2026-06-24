@@ -9,12 +9,13 @@ def _show_response(caps):
     return r
 
 
-def test_categorize_vision_model():
+def test_categorize_multimodal_model():
+    # Un modelo texto+visión (p. ej. gemma3) pertenece a AMBAS categorías.
     ss._caps_cache.clear()
     client = MagicMock()
     client.show.return_value = _show_response(["completion", "vision"])
     with patch.object(ss, "_ollama_client", return_value=client):
-        assert ss.categorize_ollama("gemma3:4b") == "vision"
+        assert ss.categorize_ollama("gemma3:4b") == ["vision", "llm"]
 
 
 def test_categorize_text_model():
@@ -22,7 +23,16 @@ def test_categorize_text_model():
     client = MagicMock()
     client.show.return_value = _show_response(["completion", "tools"])
     with patch.object(ss, "_ollama_client", return_value=client):
-        assert ss.categorize_ollama("llama3.2:3b") == "llm"
+        assert ss.categorize_ollama("llama3.2:3b") == ["llm"]
+
+
+def test_categorize_embedding_not_llm():
+    # Un modelo de embeddings no debe ofrecerse como respuestas ni visión.
+    ss._caps_cache.clear()
+    client = MagicMock()
+    client.show.return_value = _show_response(["embedding"])
+    with patch.object(ss, "_ollama_client", return_value=client):
+        assert ss.categorize_ollama("e5:large") == ["otro"]
 
 
 def test_categorize_unknown_when_show_fails():
@@ -30,7 +40,7 @@ def test_categorize_unknown_when_show_fails():
     client = MagicMock()
     client.show.side_effect = RuntimeError("ollama down")
     with patch.object(ss, "_ollama_client", return_value=client):
-        assert ss.categorize_ollama("mistery:1b") == "otro"
+        assert ss.categorize_ollama("mistery:1b") == ["otro"]
 
 
 def test_capabilities_are_cached():

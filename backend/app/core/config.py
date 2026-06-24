@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     # RAG
     ollama_url: str = "http://localhost:11434"
     qdrant_path: str = "./qdrant_data"
-    llm_model: str = "qwen3:4b"
+    llm_model: str = "gemma3:4b"
     embedding_model: str = "intfloat/multilingual-e5-large"
     rag_chunk_size: int = 512
     rag_chunk_overlap: int = 64

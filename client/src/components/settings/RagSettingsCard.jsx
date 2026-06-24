@@ -38,7 +38,7 @@ const FIELD_DEFAULTS = {
   ocrQuality: "mobile",
   visionModel: "qwen2.5vl:3b",
   autoFreePreviousVisionModel: false,
-  llmModel: "llama3.2:3b",
+  llmModel: "gemma3:4b",
 };
 
 // Campos que requieren reiniciar el backend para entrar en efecto
@@ -170,8 +170,11 @@ export default function RagSettingsCard() {
 
   const whisperMeta = (id) => WHISPER_SIZES.find((m) => m.id === id);
 
-  const visionModelInfo = installed.find((m) => m.id === form.visionModel);
-  const visionLacksCapability = !!visionModelInfo && visionModelInfo.category !== "vision";
+  // Un modelo puede aparecer en varias categorías (multimodal): tiene capacidad de
+  // visión si ALGUNO de sus items la declara.
+  const visionModelItems = installed.filter((m) => m.id === form.visionModel);
+  const visionLacksCapability =
+    visionModelItems.length > 0 && !visionModelItems.some((m) => m.category === "vision");
 
   const handleApply = async () => {
     setState("saving");
@@ -265,7 +268,7 @@ export default function RagSettingsCard() {
       <div className="mb-5">
         <OptionHeader icon={MessageSquare} title={t("ragSettings.llmModel")} hint={t("ragSettings.llmModelHint")} />
         <select
-          value={form.llmModel || "llama3.2:3b"}
+          value={form.llmModel || "gemma3:4b"}
           disabled={busy}
           onChange={(e) => update("llmModel", e.target.value)}
           className="w-full mt-2 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand/50 disabled:opacity-50"
