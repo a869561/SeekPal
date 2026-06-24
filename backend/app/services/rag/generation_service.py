@@ -164,9 +164,23 @@ class GenerationService:
         # 1024 tokens dan de sobra para una respuesta RAG con citas.
         options: dict = {"temperature": 0.2, "num_ctx": 8192, "num_predict": 1024}
         # `think` es un parámetro de primer nivel de chat() (NO va en options, donde
-        # Ollama lo ignora). Solo se pasa cuando el modo está activo; con modelos no
-        # razonadores (llama3.2) no aplica y con el modo OFF se deja el default.
-        chat_kwargs: dict = {"think": True} if self._thinking else {}
+        # Ollama lo ignora). Se pasa SIEMPRE explícito: con modo OFF hay que mandar
+        # think=False, porque los modelos razonadores (qwen3) piensan por defecto y, si
+        # no se desactiva, consumen todo num_predict razonando y NO emiten respuesta
+        # (la respuesta sale vacía tras filtrar el <think>). Con modelos no razonadores
+        # (llama3.2) Ollama lo ignora sin error.
+        chat_kwargs: dict = {"think": self._thinking}
+
+        # Respetar el device asignado por el planificador al LLM.
+        # cpu → forzar num_gpu=0 para que Ollama no use GPU.
+        # cuda → omitir num_gpu: Ollama encaja el modelo en la VRAM disponible
+        #         y desbordaría a CPU sin OOM si no cabe todo.
+        try:
+            from app.services.rag.device_planner import get_device_for as _gdf
+            if _gdf("llm") == "cpu":
+                options["num_gpu"] = 0
+        except Exception:
+            pass  # si el planner falla, Ollama decide (comportamiento anterior)
 
         prompt = build_prompt(question, chunks)
         messages = [{"role": "user", "content": prompt}]

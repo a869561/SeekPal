@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ALargeSmall } from "lucide-react";
 import { saveSettings } from "../../api/settings.js";
+import CollapsibleHeader from "../ui/CollapsibleHeader.jsx";
+import useCollapsed from "../../hooks/useCollapsed.js";
 
 const OPTIONS = [
   { value: "sm", size: "15px" },
@@ -17,6 +19,7 @@ export function applyFontSize(value) {
 export default function FontSizeSelector() {
   const { t } = useTranslation();
   const [selected, setSelected] = useState(() => localStorage.getItem("seekpal_fontsize") || "md");
+  const [collapsed, toggleCollapsed] = useCollapsed("fontsize");
 
   const LABELS = {
     sm: t("fontSize.small"),
@@ -33,11 +36,9 @@ export default function FontSizeSelector() {
 
   return (
     <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-card">
-      <div className="flex items-center gap-2 mb-5">
-        <ALargeSmall size={18} className="text-brand" />
-        <h2 className="font-semibold text-slate-800 dark:text-slate-100">{t("fontSize.title")}</h2>
-      </div>
-      <div className="flex gap-3">
+      <CollapsibleHeader icon={ALargeSmall} title={t("fontSize.title")} collapsed={collapsed} onToggle={toggleCollapsed} />
+      {!collapsed && (
+      <div className="flex gap-3 mt-5">
         {OPTIONS.map(({ value, size }) => (
           <button
             key={value}
@@ -53,6 +54,7 @@ export default function FontSizeSelector() {
           </button>
         ))}
       </div>
+      )}
     </div>
   );
 }

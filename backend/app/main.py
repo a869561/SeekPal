@@ -29,6 +29,7 @@ logger = logging.getLogger("seekpal.main")
 from app.routers import (
     ask as ask_router,
     auth as auth_router,
+    devices as devices_router,
     health as health_router,
     ingest as ingest_router,
     search as search_router,
@@ -135,6 +136,7 @@ app.include_router(stats_router.router)
 app.include_router(search_router.router)
 app.include_router(settings_router.router)
 app.include_router(system_router.router)
+app.include_router(devices_router.router)
 app.include_router(ask_router.router)
 
 

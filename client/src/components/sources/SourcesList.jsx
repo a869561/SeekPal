@@ -73,7 +73,7 @@ export default function SourcesList({ sources, onDelete, onUpdate }) {
 
         return (
           <div key={source._id} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-card reveal-up" style={{ "--stagger": idx }}>
-            <div className="flex items-start justify-between gap-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between lg:gap-4">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 mb-1">
                   <h3 className="font-semibold text-slate-800 dark:text-slate-100 truncate">{source.name}</h3>
@@ -83,12 +83,14 @@ export default function SourcesList({ sources, onDelete, onUpdate }) {
                   </span>
                 </div>
                 <p className="text-slate-400 dark:text-slate-500 text-xs font-mono truncate">{source.path}</p>
-                <div className="flex items-center gap-3 mt-2 text-xs text-slate-400 dark:text-slate-500 flex-wrap">
+                {/* Cada dato es atómico (no se parte "68 indexados"); con gap-y
+                    las secciones envuelven limpias si no caben en una línea. */}
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-2 text-xs text-slate-400 dark:text-slate-500">
                   <span>{t("sources.fileCount", { count: source.fileCount ?? 0 })}</span>
                   {source.lastIngested && (
                     <span>
                       {t("sources.lastIngest", { date: formatDate(source.lastIngested) })}
-                      {formatDuration(source.lastIngestDurationSecs) && ` · ${formatDuration(source.lastIngestDurationSecs)}`}
+                      {formatDuration(source.lastIngestDurationSecs) && ` (${formatDuration(source.lastIngestDurationSecs)})`}
                     </span>
                   )}
                   {source.lastIngested && (<>
@@ -99,7 +101,7 @@ export default function SourcesList({ sources, onDelete, onUpdate }) {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
                 <Button
                   variant={source.autoIndex ? "brand" : "neutral"}
                   onClick={() => handleToggleAutoIndex(source)}
@@ -131,9 +133,8 @@ export default function SourcesList({ sources, onDelete, onUpdate }) {
                 </Button>
 
                 <Button
-                  variant="ghost"
                   size="sm"
-                  className="!p-1.5 hover:text-danger"
+                  className="!p-1.5 !bg-red-500 !text-white hover:!bg-red-600"
                   onClick={() => onDelete(source._id)}
                   title={t("sources.deleteTooltip")}
                 >

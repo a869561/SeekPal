@@ -2,10 +2,13 @@ import { useTranslation } from "react-i18next";
 import { Monitor, Sun, Moon } from "lucide-react";
 import { useTheme } from "../../context/ThemeContext.jsx";
 import { saveSettings } from "../../api/settings.js";
+import CollapsibleHeader from "../ui/CollapsibleHeader.jsx";
+import useCollapsed from "../../hooks/useCollapsed.js";
 
 export default function ThemeSelector() {
   const { t } = useTranslation();
   const { theme, setTheme } = useTheme();
+  const [collapsed, toggleCollapsed] = useCollapsed("theme");
 
   const OPTIONS = [
     { value: "auto",  label: t("theme.auto"),  icon: Monitor },
@@ -15,11 +18,9 @@ export default function ThemeSelector() {
 
   return (
     <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-card">
-      <div className="flex items-center gap-2 mb-5">
-        <Monitor size={18} className="text-brand" />
-        <h2 className="font-semibold text-slate-800 dark:text-slate-100">{t("theme.title")}</h2>
-      </div>
-      <div className="flex gap-3">
+      <CollapsibleHeader icon={Monitor} title={t("theme.title")} collapsed={collapsed} onToggle={toggleCollapsed} />
+      {!collapsed && (
+      <div className="flex gap-3 mt-5">
         {OPTIONS.map(({ value, label, icon: Icon }) => (
           <button
             key={value}
@@ -35,6 +36,7 @@ export default function ThemeSelector() {
           </button>
         ))}
       </div>
+      )}
     </div>
   );
 }

@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter, BackgroundTasks, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -50,8 +52,12 @@ async def open_file(body: OpenFileRequest):
 
 @router.get("/hardware")
 async def hardware_info():
-    """Devuelve componentes detectados (CPU, RAM, GPUs) y provider de embeddings activo."""
+    """Devuelve componentes detectados (CPU, RAM, GPUs), provider de embeddings activo
+    y el plan de dispositivos vigente (para que HardwareCard muestre el estado real).
+    """
+    from app.core import runtime_settings
     from app.core.database import get_embedding_service
+    from app.services.rag.device_planner import _vram_total_mib, plan_devices
 
     hw = await system_service.detect_hardware()
 
@@ -80,6 +86,12 @@ async def hardware_info():
         if pkg:
             recommendation = {"package": pkg}
 
+    # Plan de dispositivos vigente: calculado con la configuración guardada en Mongo.
+    # Se usa la VRAM detectada en tiempo real para que el valor sea siempre coherente.
+    priority_actual: str = runtime_settings.get("processingPriority", "search")
+    overrides_actual: dict = runtime_settings.get("deviceOverrides", {}) or {}
+    plan_actual = plan_devices(priority_actual, overrides_actual, _vram_total_mib())
+
     return ok({
         "cpu": hw["cpu"],
         "ram_gb": hw["ram_gb"],
@@ -91,6 +103,9 @@ async def hardware_info():
         "recommendation": recommendation,
         "available_providers": system_service.available_providers(hw["gpus"]),
         "preference": system_service.get_provider_preference(),  # auto | cpu | cuda | directml
+        # Campos nuevos (§11.2 del spec): estado vigente del planificador.
+        "device_plan": plan_actual["devices"],           # mapa componente → "cpu" | "cuda"
+        "processing_priority": priority_actual,          # "search" | "ingest"
     })
 
 
@@ -219,8 +234,12 @@ async def restart(force: bool = False):
 @router.get("/models")
 async def list_models():
     """Catálogo de modelos (instalados y no) con tamaño, estado activo y si son
-    eliminables. Los protegidos (modelo activo o de respaldo) no se pueden borrar."""
-    return ok(system_service.list_models())
+    eliminables. Los protegidos (modelo activo o de respaldo) no se pueden borrar.
+
+    list_models() hace I/O bloqueante (Ollama por red, scan de la caché HF en
+    disco, comprobaciones de ficheros) — se ejecuta en un hilo para no bloquear
+    el event loop y congelar el resto de peticiones mientras se lista."""
+    return ok(await asyncio.to_thread(system_service.list_models))
 
 
 @router.post("/models/pull")

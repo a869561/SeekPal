@@ -19,17 +19,17 @@ function MetaCell({ file, t }) {
     return <span>{m.wordCount != null ? t("files.words", { count: m.wordCount.toLocaleString() }) : "—"}</span>;
   }
   if (file.category === "image") {
-    return <span>{m.width && m.height ? `${m.width}×${m.height}${m.ppi ? ` · ${m.ppi} ppi` : ""}` : "—"}</span>;
+    return <span>{m.width && m.height ? `${m.width}×${m.height}${m.ppi ? ` (${m.ppi} ppi)` : ""}` : "—"}</span>;
   }
   if (file.category === "audio") {
     const min = Math.floor((m.duration || 0) / 60);
     const sec = (m.duration || 0) % 60;
-    return <span>{m.duration != null ? `${min}:${String(sec).padStart(2, "0")}${m.bitrate ? ` · ${m.bitrate} kbps` : ""}` : "—"}</span>;
+    return <span>{m.duration != null ? `${min}:${String(sec).padStart(2, "0")}${m.bitrate ? ` (${m.bitrate} kbps)` : ""}` : "—"}</span>;
   }
   if (file.category === "video") {
     const min = Math.floor((m.duration || 0) / 60);
     const sec = (m.duration || 0) % 60;
-    return <span>{m.duration != null ? `${min}:${String(sec).padStart(2, "0")}${m.width ? ` · ${m.width}×${m.height}` : ""}${m.fps ? ` · ${m.fps} fps` : ""}` : "—"}</span>;
+    return <span>{m.duration != null ? `${min}:${String(sec).padStart(2, "0")}${m.width ? ` (${m.width}×${m.height}${m.fps ? `, ${m.fps} fps` : ""})` : ""}` : "—"}</span>;
   }
   return <span>—</span>;
 }

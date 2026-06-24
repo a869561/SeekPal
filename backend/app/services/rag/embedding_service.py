@@ -154,12 +154,20 @@ class EmbeddingService:
 
     def __init__(self, model: str, batch_size: int):
         import warnings
-        # Intenta GPU (CUDA / DirectML); si falla, usa CPU
+        from app.services.rag.device_planner import get_device_for
+
+        # El planificador decide si los embeddings van a GPU o CPU.
+        # En el preset "search" (default) se fuerzan a CPU para dejar la VRAM
+        # al LLM de Ollama; en "ingest" se mandan a GPU para mayor velocidad.
+        emb_device = get_device_for("embeddings")
+        providers = ["CPUExecutionProvider"] if emb_device == "cpu" else _PROVIDERS
+
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             try:
-                self._model = TextEmbedding(model_name=model, providers=_PROVIDERS)
+                self._model = TextEmbedding(model_name=model, providers=providers)
             except Exception:
+                # Fallback a CPU si el provider preferido falla (GPU no disponible, etc.)
                 self._model = TextEmbedding(model_name=model)
         self._batch_size = batch_size
         # Activar prefijos e5 si el modelo es de la familia e5 (intfloat/multilingual-e5-*,
@@ -287,11 +295,15 @@ class RerankerService:
                 raise RuntimeError(
                     f"FastEmbed no expone TextCrossEncoder en esta version: {exc}"
                 ) from exc
-        # device="cpu" fuerza el cross-encoder a CPU aunque haya GPU: en
-        # tarjetas de ~4 GB los pesos de embeddings+reranker saturan la VRAM
-        # y el rerank provoca OOM/thrashing; en CPU rinde parecido y deja la
-        # VRAM libre para el LLM de Ollama.
-        providers = ["CPUExecutionProvider"] if device == "cpu" else _PROVIDERS
+        # El planificador de dispositivos decide si el reranker va a GPU o CPU.
+        # Si el caller pasa un device explícito ("cpu"/"cuda"/"auto"), se usa ese;
+        # si es "auto" (default), se consulta al planificador.
+        # En preset "search" el reranker es candidato a GPU (fase query, alta prioridad);
+        # en hardware de 4 GB normalmente no cabe junto al LLM, así que el planner
+        # lo mandará a CPU de todas formas.
+        from app.services.rag.device_planner import get_device_for
+        resolved_device = device if device != "auto" else get_device_for("reranker")
+        providers = ["CPUExecutionProvider"] if resolved_device == "cpu" else _PROVIDERS
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             try:

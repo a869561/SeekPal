@@ -2,7 +2,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.models.config import OcrQuality
+from app.models.config import DeviceOverride, OcrQuality, ProcessingPriority
 
 
 class AddSourceRequest(BaseModel):
@@ -25,3 +25,7 @@ class SettingsPatch(BaseModel):
     ocrQuality: OcrQuality | None = None
     visionModel: str | None = None
     autoFreePreviousVisionModel: bool | None = None
+    # Planificador de dispositivos VRAM-aware (requiere reinicio).
+    processingPriority: ProcessingPriority | None = None
+    # Overrides manuales por componente. Claves: "embeddings","reranker","whisper","ocr".
+    deviceOverrides: dict[str, DeviceOverride] | None = None

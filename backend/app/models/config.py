@@ -8,6 +8,12 @@ from pydantic import BaseModel, Field
 
 OcrQuality = Literal["mobile", "server"]
 
+# Valores válidos para el preset de prioridad de procesamiento.
+ProcessingPriority = Literal["search", "ingest"]
+
+# Valores válidos para un override de dispositivo por componente.
+DeviceOverride = Literal["auto", "gpu", "cpu"]
+
 
 def _now_utc() -> datetime:
     return datetime.now(UTC)
@@ -44,6 +50,17 @@ class UserSettings(BaseModel):
     # Por defecto OFF: cambiar a menudo no debe re-descargar GB cada vez. Nunca
     # toca el modelo de respaldo (moondream) ni el LLM activo.
     autoFreePreviousVisionModel: bool = False
+
+    # Planificador de dispositivos VRAM-aware (§4 del diseño).
+    # "search"  → prioriza el camino de consulta (reranker en GPU, embeddings en CPU).
+    # "ingest"  → prioriza la fase de ingesta (embeddings/Whisper/OCR en GPU).
+    # Requiere reinicio para que entre en efecto.
+    processingPriority: ProcessingPriority = "search"
+
+    # Overrides manuales por componente (usuarios avanzados).
+    # Claves válidas: "embeddings", "reranker", "whisper", "ocr", "llm", "vision".
+    # Valores válidos: "auto" | "gpu" | "cpu". Default vacío = todo auto.
+    deviceOverrides: dict[str, DeviceOverride] = Field(default_factory=dict)
 
 
 class Config(Document):

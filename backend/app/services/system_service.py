@@ -457,11 +457,15 @@ _OLLAMA_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 _FALLBACK_VISION_MODEL = "moondream"
 
 # Catálogo de modelos conocidos: aparecen en el panel aunque no estén instalados.
+# El nombre real del modelo es la etiqueta: ya van agrupados por tipo en el panel,
+# así que no se repite el tipo en el nombre. sizeHint = peso aproximado de la
+# descarga (Ollama no expone el tamaño hasta instalarlo); se muestra con "~" para
+# que no quede ningún modelo del catálogo sin tamaño.
 _MODEL_CATALOG: list[dict] = [
-    {"id": "qwen2.5vl:3b", "category": "vision", "label": "Visión · calidad"},
-    {"id": "moondream",    "category": "vision", "label": "Visión · ligero (respaldo)"},
-    {"id": "llama3.2:3b",  "category": "llm",    "label": "LLM · ligero (CPU/sin gráfica)"},
-    {"id": "qwen3:4b",     "category": "llm",    "label": "LLM · calidad (requiere GPU/RAM)"},
+    {"id": "qwen2.5vl:3b", "category": "vision", "label": "qwen2.5vl:3b", "sizeHint": 3_200_000_000},
+    {"id": "moondream",    "category": "vision", "label": "moondream",    "sizeHint": 1_700_000_000},
+    {"id": "llama3.2:3b",  "category": "llm",    "label": "llama3.2:3b",  "sizeHint": 2_000_000_000},
+    {"id": "qwen3:4b",     "category": "llm",    "label": "qwen3:4b",     "sizeHint": 2_600_000_000},
 ]
 
 # Orden del panel de modelos: primero por tipo, luego por potencia (de ligero a
@@ -477,7 +481,10 @@ _POWER_ORDER = {
 }
 
 # Estado de la descarga en curso (patrón análogo a get_install_status).
-_pull_status: dict = {"status": "idle", "model": None, "error": None}
+# completed/total (bytes) solo se rellenan en descargas de Ollama, que reportan
+# progreso por streaming; en los demás managers quedan a None (spinner sin %).
+_pull_status: dict = {"status": "idle", "model": None, "error": None,
+                      "completed": None, "total": None}
 
 
 def _norm_model(name: str) -> str:
@@ -620,7 +627,7 @@ def _whisper_models() -> list[dict]:
         is_active = size == active
         out.append({
             "id": f"whisper:{size}", "manager": "whisper", "category": "audio",
-            "label": f"Audio · {size}",
+            "label": size,
             "sizeBytes": installed.get(size) if is_inst else _WHISPER_SIZE_HINT[size],
             "installed": is_inst, "active": is_active,
             "protected": is_active, "deletable": is_inst and not is_active,
@@ -662,10 +669,10 @@ def _ocr_models() -> list[dict]:
     server_inst = bool(server_paths) and all(p.exists() for p in server_paths)
     server_size = sum(p.stat().st_size for p in server_paths if p.exists()) if server_inst else 140_000_000
     return [
-        {"id": "ocr:mobile", "manager": "ocr", "category": "ocr", "label": "OCR · rápido (incluido)",
+        {"id": "ocr:mobile", "manager": "ocr", "category": "ocr", "label": "PP-OCRv4 mobile",
          "sizeBytes": None, "installed": True, "active": active == "mobile",
          "protected": True, "deletable": False},
-        {"id": "ocr:server", "manager": "ocr", "category": "ocr", "label": "OCR · preciso",
+        {"id": "ocr:server", "manager": "ocr", "category": "ocr", "label": "PP-OCRv4 server",
          "sizeBytes": server_size, "installed": server_inst, "active": active == "server",
          "protected": active == "server", "deletable": server_inst and active != "server"},
     ]
@@ -678,7 +685,7 @@ def _docling_models() -> list[dict]:
     active = bool(runtime_settings.get("useDocling", False))
     return [{
         "id": "docling", "manager": "docling", "category": "pdf",
-        "label": "PDFs estructurados (Docling)",
+        "label": "Docling",
         "sizeBytes": 2_000_000_000,  # ~2 GB (torch + transformers + modelos), estimado
         "installed": inst, "active": active,
         "protected": active, "deletable": inst and not active,
@@ -725,7 +732,7 @@ def list_models() -> list[dict]:
             "manager": "ollama",
             "category": entry["category"],
             "label": entry["label"],
-            "sizeBytes": size,
+            "sizeBytes": size if is_inst else entry.get("sizeHint"),
             "installed": is_inst,
             "active": is_active,
             "protected": protected,
@@ -819,7 +826,17 @@ def get_pull_status() -> dict:
 def _install_sync(item: dict) -> None:
     mgr = item["manager"]
     if mgr == "ollama":
-        _ollama_client().pull(item["id"])
+        # stream=True para poder reportar progreso (bytes descargados / totales)
+        # al panel. Ollama emite varios eventos; los de descarga traen completed
+        # y total del blob en curso (con un solo blob grande ≈ progreso global).
+        for prog in _ollama_client().pull(item["id"], stream=True):
+            completed = getattr(prog, "completed", None)
+            total = getattr(prog, "total", None)
+            if completed is None and isinstance(prog, dict):
+                completed, total = prog.get("completed"), prog.get("total")
+            if isinstance(total, (int, float)) and total:
+                _pull_status["completed"] = int(completed or 0)
+                _pull_status["total"] = int(total)
     elif mgr == "whisper":
         from huggingface_hub import snapshot_download
         size = item["id"].split(":", 1)[1]
@@ -842,11 +859,14 @@ async def pull_model(model_id: str) -> None:
     item = _find_item(model_id)
     if item is None:
         item = {"manager": "ollama", "id": model_id}
-    _pull_status = {"status": "pulling", "model": model_id, "error": None}
+    _pull_status = {"status": "pulling", "model": model_id, "error": None,
+                    "completed": None, "total": None}
     try:
         await asyncio.to_thread(_install_sync, item)
-        _pull_status = {"status": "done", "model": model_id, "error": None}
+        _pull_status = {"status": "done", "model": model_id, "error": None,
+                        "completed": None, "total": None}
     except Exception as exc:  # noqa: BLE001
-        _pull_status = {"status": "error", "model": model_id, "error": str(exc)}
+        _pull_status = {"status": "error", "model": model_id, "error": str(exc),
+                        "completed": None, "total": None}
 
 

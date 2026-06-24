@@ -282,12 +282,12 @@ export default function IngestionProgress({ sourceId, onDone, force = true }) {
   })();
 
   const chunkDetail = phase === "embedding" && embedProgress.total > 0
-    ? ` · ${embedProgress.current}/${embedProgress.total} chunks`
+    ? ` (${embedProgress.current}/${embedProgress.total} chunks)`
     : "";
 
   const aiSubtext = isDone || paused || isReconnecting || !currentFile
     ? null
-    : `${currentFile} — ${phaseLabel}${chunkDetail}`;
+    : `${currentFile}: ${phaseLabel}${chunkDetail}`;
 
   return (
     <div className="mt-4 space-y-3">

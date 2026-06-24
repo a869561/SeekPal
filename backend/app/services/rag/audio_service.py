@@ -30,12 +30,25 @@ _DEFAULT_LANG = os.getenv("SEEKPAL_WHISPER_LANG", "auto")  # auto = detect
 
 
 def _detect_device() -> tuple[str, str]:
-    """Decide device + compute_type segun hardware disponible.
+    """Decide device + compute_type para Whisper según el planificador y el hardware.
+
+    Consulta primero el planificador de dispositivos (device_planner). Si el
+    planificador dice "cpu", se fuerza CPU sin importar qué GPU haya. Si dice
+    "cuda", se comprueba que CUDA esté disponible (DLLs cargables); si no lo
+    está, se cae a CPU de forma segura.
 
     Devuelve (device, compute_type):
-      - ("cuda", "int8_float16") si CUDA esta listo (wheels nvidia-* cargables)
-      - ("cpu",  "int8")          fallback siempre
+      - ("cuda", "int8_float16") si el planner asigna GPU y CUDA está disponible
+      - ("cpu",  "int8")          en cualquier otro caso
     """
+    from app.services.rag.device_planner import get_device_for
+    planner_device = get_device_for("whisper")
+
+    # Si el planificador fuerza CPU, no comprobar hardware (evita latencia innecesaria).
+    if planner_device == "cpu":
+        return ("cpu", "int8")
+
+    # El planificador dice "cuda": verificar que CUDA esté realmente disponible.
     if os.name == "nt":
         try:
             import ctypes

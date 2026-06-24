@@ -33,7 +33,17 @@ if TYPE_CHECKING:
     from rapidocr_onnxruntime import RapidOCR
 
 
-_VISION_NUM_GPU = int(os.getenv("SEEKPAL_VISION_NUM_GPU", "0"))  # 0 = CPU; evita OOM con embeddings en GPU
+def _vision_num_gpu() -> int:
+    """Devuelve num_gpu para el modelo de visión según el planificador.
+
+    cuda → 99 (usa GPU), cpu → 0 (fuerza CPU).
+    Fallback al env SEEKPAL_VISION_NUM_GPU si el planner no está disponible.
+    """
+    try:
+        from app.services.rag.device_planner import get_device_for as _gdf
+        return 99 if _gdf("vision") == "cuda" else 0
+    except Exception:
+        return int(os.getenv("SEEKPAL_VISION_NUM_GPU", "0"))
 
 
 def _vision_model() -> str:
@@ -50,11 +60,13 @@ _OLLAMA_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 # pequeños (p.ej. moondream) tienden a repetir prompts estructurados en vez de
 # describir. Validado empíricamente con qwen2.5vl:3b: produce captions ricos en
 # español que nombran marcas/nombres propios sin repetir las instrucciones.
+# Prompt deliberadamente CORTO: con qwen2.5vl:3b un prompt largo con muchas
+# instrucciones (tipo, objetos, texto, marcas, términos de búsqueda…) hace que el
+# modelo se atasque y genere muy lento (decenas de segundos) o derive a inglés. Un
+# prompt breve produce la misma descripción útil en español en ~5 s. (Medido.)
 _CAPTION_PROMPT = (
-    "Describe directamente lo que ves en esta imagen, en español, en 2 a 4 frases "
-    "dentro de un solo párrafo. Incluye el tipo de imagen, los objetos y personas, "
-    "cualquier texto, marca, logo o nombre propio visible, el escenario y términos "
-    "útiles para buscarla. No repitas ni menciones estas instrucciones."
+    "Describe en español, en 2 o 3 frases, lo que se ve en esta imagen: "
+    "objetos, personas, texto o marcas visibles, y el escenario."
 )
 _CAPTION_PROMPT_RETRY = (
     "Describe esta imagen con detalle: colores, formas, objetos, "
@@ -65,25 +77,37 @@ _CAPTION_PROMPT_FRAME = (
     "En una frase, describe brevemente lo que muestra este fotograma de vídeo."
 )
 
-# Tokens de plantilla de chat (ChatML y similares) que algunos VLM pequeños
-# emiten como contenido cuando degeneran: "<|im_start|>", "<|im_end|>", "<|endoftext|>"…
-_SPECIAL_TOKEN_RE = re.compile(r"<\|[^>]*\|>")
+# Marcadores de "ruido" entre signos que algunos VLM emiten como contenido al
+# degenerar: ChatML ("<|im_start|>", qwen) o exclamaciones ("!!!IMAGE!!!",
+# moondream). Es un patrón GENÉRICO (texto entre delimitadores), no una lista por
+# modelo, para no tener que perseguir las manías de cada VLM nuevo.
+_MARKER_RE = re.compile(r"<\|[^|]*\|>|!{2,}[^!]*!{2,}")
+# Frase-preámbulo inicial que termina en ':' y salto de línea, que algunos modelos
+# anteponen ("Aquí tienes una descripción:", "Sure, here's a description:"). Se
+# reconoce el patrón (una línea corta inicial acabada en ':'), no el texto exacto.
+_PREAMBLE_RE = re.compile(r"^[^\n:]{1,80}:\s*\n+")
 
 
 def _sanitize_caption(text: str) -> str:
-    """Limpia y valida la salida del modelo de visión.
+    """Normaliza y valida la salida del modelo de visión.
 
-    Los VLM pequeños como qwen2.5vl (formato ChatML) a veces degeneran y emiten
-    sus propios tokens de plantilla ("<|im_start|>") como contenido, o repiten una
-    palabra en bucle. Sin filtrar, eso se indexaba tal cual ("Descripcion:
-    <|im_start|> <|im_start|>…") y contaminaba la búsqueda. Aquí se eliminan esos
-    tokens; si lo que queda no es una descripción real (vacío o degenerado por
-    repetición), se devuelve "" para que actúe el retry / OCR / rescate por nombre
-    en vez de indexar basura.
+    Importante: la cura de fondo de la degeneración es el reescalado de la imagen
+    (ver _image_bytes_for_ollama), no esto. Esta función es una RED DE SEGURIDAD
+    genérica para poder cambiar de modelo de visión sin sorpresas: aplica reglas
+    de normalización que NO dependen del modelo concreto —quitar marcadores entre
+    delimitadores (ChatML de qwen, "!!!IMAGE!!!" de moondream) y una intro-preámbulo
+    inicial acabada en ':' (gemma y otros)— y luego valida que quede una descripción
+    real. Si no (vacío, solo símbolos, degenerado por repetición), devuelve "" para
+    que actúe el retry / OCR / rescate por nombre en vez de indexar basura.
     """
     if not text:
         return ""
-    cleaned = " ".join(_SPECIAL_TOKEN_RE.sub(" ", text).split())
+    cleaned = _MARKER_RE.sub(" ", text)
+    cleaned = _PREAMBLE_RE.sub("", cleaned)
+    cleaned = " ".join(cleaned.split())
+    # Puntuación/espacios sobrantes al principio (p. ej. tras quitar un marcador
+    # quedaba ", a man…"). Regla genérica, no por modelo.
+    cleaned = re.sub(r"^[\s,.;:–—-]+", "", cleaned)
     # ¿Queda texto real (alguna letra o dígito, no solo símbolos)?
     if not re.search(r"[^\W_]", cleaned):
         return ""
@@ -152,11 +176,39 @@ def _ensure_server_models() -> "tuple[Path, Path] | None":
     return result_paths[0], result_paths[1]
 
 
+def _ocr_providers() -> list[str]:
+    """Devuelve la lista de providers ONNX para RapidOCR según el planificador.
+
+    Si el planificador asigna "cuda" para el OCR se ofrecen también CUDAExecutionProvider
+    y DirectMLExecutionProvider; si dice "cpu" solo se pasa CPUExecutionProvider.
+    RapidOCR usa internamente onnxruntime y respeta la lista de providers igual que
+    fastembed: toma el primero disponible y cae al siguiente si no está instalado.
+    """
+    from app.services.rag.device_planner import get_device_for
+    ocr_device = get_device_for("ocr")
+    if ocr_device == "cpu":
+        return ["CPUExecutionProvider"]
+    # "cuda": devolver la pila completa GPU → CPU para fallback automático.
+    providers: list[str] = []
+    try:
+        import onnxruntime as _ort
+        available = _ort.get_available_providers()
+        for p in ("CUDAExecutionProvider", "DirectMLExecutionProvider", "CPUExecutionProvider"):
+            if p in available:
+                providers.append(p)
+    except Exception:
+        pass
+    if not providers:
+        providers = ["CPUExecutionProvider"]
+    return providers
+
+
 def _load_ocr() -> "RapidOCR":
     from app.core import runtime_settings
     from rapidocr_onnxruntime import RapidOCR
     quality = runtime_settings.get("ocrQuality", "mobile")
-    logger.info("OCR: cargando RapidOCR (calidad=%s)...", quality)
+    providers = _ocr_providers()
+    logger.info("OCR: cargando RapidOCR (calidad=%s, providers=%s)...", quality, providers)
     if quality == "server":
         paths = _ensure_server_models()
         if paths is not None:
@@ -208,25 +260,43 @@ _register(_caption)
 
 _FORMATS_NEEDING_CONVERSION = {".webp", ".avif", ".heic", ".heif"}
 
+# Lado mayor máximo (px) al pasar imágenes al VLM. Las imágenes más grandes se
+# reescalan: a resolución completa generan demasiados tokens de visión y el VLM
+# pequeño degenera (ver _image_bytes_for_ollama).
+_MAX_VISION_DIM = 1024
+
 
 def _image_bytes_for_ollama(path: Path) -> bytes:
     """Devuelve los bytes de imagen listos para Ollama.
 
-    JPG/PNG se pasan tal cual (sin re-encodear). WEBP, AVIF y HEIC se
+    Imágenes pequeñas en JPG/PNG se pasan tal cual. WEBP, AVIF y HEIC se
     convierten a PNG porque algunos modelos de visión en Ollama crashean
     ("model runner unexpectedly stopped") al recibir estos formatos.
+
+    Además, las imágenes grandes se reescalan a _MAX_VISION_DIM px de lado mayor.
+    Una captura 16:9 a resolución completa genera tantos *tokens* de visión que
+    desbordan el contexto del VLM pequeño (qwen2.5vl:3b): el modelo degenera y
+    emite sus tokens de plantilla ("<|im_start|>") en bucle en vez de describir,
+    y además dispara la latencia en CPU (~400 s/imagen). Reescalar a ~1024 px
+    elimina la degeneración y reduce la latencia varias veces, sin pérdida
+    apreciable de detalle para el captioning.
     """
-    if path.suffix.lower() in _FORMATS_NEEDING_CONVERSION:
-        try:
-            import io
-            from PIL import Image
-            with Image.open(path) as img:
-                buf = io.BytesIO()
-                img.convert("RGB").save(buf, format="PNG")
-                return buf.getvalue()
-        except Exception:
-            pass
-    return path.read_bytes()
+    needs_conversion = path.suffix.lower() in _FORMATS_NEEDING_CONVERSION
+    try:
+        import io
+        from PIL import Image
+        with Image.open(path) as img:
+            too_big = max(img.size) > _MAX_VISION_DIM
+            if not needs_conversion and not too_big:
+                return path.read_bytes()
+            rgb = img.convert("RGB")
+            if too_big:
+                rgb.thumbnail((_MAX_VISION_DIM, _MAX_VISION_DIM))
+            buf = io.BytesIO()
+            rgb.save(buf, format="PNG")
+            return buf.getvalue()
+    except Exception:
+        return path.read_bytes()
 
 
 def warm_ocr() -> None:
@@ -299,7 +369,7 @@ def caption_image(path: Path, brief: bool = False) -> str:
                     "content": prompt,
                     "images": [_image_bytes_for_ollama(path)],
                 }],
-                options={"temperature": 0.2, "num_ctx": 2048, "num_gpu": _VISION_NUM_GPU, "num_predict": num_predict},
+                options={"temperature": 0.2, "num_ctx": 2048, "num_gpu": _vision_num_gpu(), "num_predict": num_predict},
             )
             _caption_errors = 0
             return _sanitize_caption(resp.message.content or "")
@@ -407,7 +477,7 @@ async def caption_image_async(path: Path, retry: bool = False) -> str:
                     "content": prompt,
                     "images": [_image_bytes_for_ollama(path)],
                 }],
-                options={"temperature": 0.2, "num_ctx": 2048, "num_gpu": _VISION_NUM_GPU, "num_predict": 220},
+                options={"temperature": 0.2, "num_ctx": 2048, "num_gpu": _vision_num_gpu(), "num_predict": 220},
             )
             _caption_errors = 0
             return _sanitize_caption(resp.message.content or "")

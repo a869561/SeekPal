@@ -29,22 +29,22 @@ function MetaSnippet({ file }) {
   if (file.category === "text" || file.category === "document") {
     if (m.wordCount != null) parts.push(`${m.wordCount.toLocaleString()} palabras`);
   } else if (file.category === "image") {
-    if (m.width && m.height) parts.push(`${m.width}×${m.height}${m.ppi ? ` · ${m.ppi} ppi` : ""}`);
+    if (m.width && m.height) parts.push(`${m.width}×${m.height}${m.ppi ? ` (${m.ppi} ppi)` : ""}`);
   } else if (file.category === "audio") {
     if (m.duration != null) {
       const min = Math.floor(m.duration / 60);
       const sec = m.duration % 60;
-      parts.push(`${min}:${String(sec).padStart(2, "0")}${m.bitrate ? ` · ${m.bitrate} kbps` : ""}`);
+      parts.push(`${min}:${String(sec).padStart(2, "0")}${m.bitrate ? ` (${m.bitrate} kbps)` : ""}`);
     }
   } else if (file.category === "video") {
     if (m.duration != null) {
       const min = Math.floor(m.duration / 60);
       const sec = m.duration % 60;
-      parts.push(`${min}:${String(sec).padStart(2, "0")}${m.width ? ` · ${m.width}×${m.height}` : ""}`);
+      parts.push(`${min}:${String(sec).padStart(2, "0")}${m.width ? ` (${m.width}×${m.height})` : ""}`);
     }
   }
   if (!parts.length) return null;
-  return <span>{parts.join(" · ")}</span>;
+  return <span>{parts.join(", ")}</span>;
 }
 
 function FileResultCard({ file }) {

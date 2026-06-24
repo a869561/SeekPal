@@ -77,7 +77,7 @@ async def ask(body: AskRequest, request: Request):
                     file_id=c.file_id,
                     file_name=c.file_name,
                     page=c.page,
-                    snippet=c.text[:200] + ("..." if len(c.text) > 200 else ""),
+                    snippet=(c.text if body.full_context else c.text[:200] + ("..." if len(c.text) > 200 else "")),
                     score=c.score,
                 ).model_dump()
                 for c in chunks

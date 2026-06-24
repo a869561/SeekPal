@@ -33,6 +33,12 @@ _defaults: dict[str, Any] = {
     "ocrQuality": "mobile",
     "visionModel": os.getenv("SEEKPAL_VISION_MODEL", "moondream"),
     "autoFreePreviousVisionModel": False,
+    # Planificador de dispositivos VRAM-aware.
+    # "search" (default): prioriza latencia de consulta (reranker en GPU).
+    # "ingest": prioriza velocidad de ingesta (embeddings/Whisper/OCR en GPU).
+    "processingPriority": "search",
+    # Overrides manuales por componente. {} = todo en auto (el planner decide).
+    "deviceOverrides": {},
 }
 
 _settings: dict[str, Any] = dict(_defaults)

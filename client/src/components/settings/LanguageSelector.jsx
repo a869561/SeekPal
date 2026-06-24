@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Languages } from "lucide-react";
 import { saveSettings } from "../../api/settings.js";
+import CollapsibleHeader from "../ui/CollapsibleHeader.jsx";
+import useCollapsed from "../../hooks/useCollapsed.js";
 
 const OPTIONS = [
   { value: "es", label: "Español", flag: "🇪🇸" },
@@ -11,6 +13,7 @@ const OPTIONS = [
 export default function LanguageSelector() {
   const { t, i18n } = useTranslation();
   const [selected, setSelected] = useState(() => localStorage.getItem("seekpal_lang") || "es");
+  const [collapsed, toggleCollapsed] = useCollapsed("language");
 
   function handleSelect(value) {
     setSelected(value);
@@ -21,11 +24,9 @@ export default function LanguageSelector() {
 
   return (
     <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-card">
-      <div className="flex items-center gap-2 mb-5">
-        <Languages size={18} className="text-brand" />
-        <h2 className="font-semibold text-slate-800 dark:text-slate-100">{t("language.title")}</h2>
-      </div>
-      <div className="flex gap-3">
+      <CollapsibleHeader icon={Languages} title={t("language.title")} collapsed={collapsed} onToggle={toggleCollapsed} />
+      {!collapsed && (
+      <div className="flex gap-3 mt-5">
         {OPTIONS.map(({ value, label, flag }) => (
           <button
             key={value}
@@ -41,6 +42,7 @@ export default function LanguageSelector() {
           </button>
         ))}
       </div>
+      )}
     </div>
   );
 }

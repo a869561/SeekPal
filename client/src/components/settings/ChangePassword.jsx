@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import { changePassword } from "../../api/auth.js";
 import toast from "react-hot-toast";
 import { Lock, Eye, EyeOff } from "lucide-react";
+import CollapsibleHeader from "../ui/CollapsibleHeader.jsx";
+import useCollapsed from "../../hooks/useCollapsed.js";
 
 export default function ChangePassword() {
   const { t } = useTranslation();
@@ -10,6 +12,7 @@ export default function ChangePassword() {
   const [visible, setVisible] = useState({ currentPassword: false, newPassword: false, confirm: false });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [collapsed, toggleCollapsed] = useCollapsed("password");
 
   const FIELDS = [
     { field: "currentPassword", labelKey: "password.current" },
@@ -50,11 +53,9 @@ export default function ChangePassword() {
 
   return (
     <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-card">
-      <div className="flex items-center gap-2 mb-5">
-        <Lock size={18} className="text-brand" />
-        <h2 className="font-semibold text-slate-800 dark:text-slate-100">{t("password.title")}</h2>
-      </div>
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <CollapsibleHeader icon={Lock} title={t("password.title")} collapsed={collapsed} onToggle={toggleCollapsed} />
+      {!collapsed && (
+      <form onSubmit={handleSubmit} className="space-y-4 mt-5">
         {FIELDS.map(({ field, labelKey }) => (
           <div key={field}>
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">{t(labelKey)}</label>
@@ -91,6 +92,7 @@ export default function ChangePassword() {
           {loading ? t("password.saving") : t("password.submit")}
         </button>
       </form>
+      )}
     </div>
   );
 }
