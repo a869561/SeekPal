@@ -12,7 +12,9 @@ class Settings(BaseSettings):
     jwt_expires_minutes: int = 480
     jwt_algorithm: str = "HS256"
 
-    default_password: str = "seekpal"
+    # Contraseña inicial al primer arranque (sin Config en Mongo). Se recomienda
+    # cambiarla desde Ajustes en el primer uso. Documentada en README y manual.
+    default_password: str = "user1111"
     cors_origin: str = "http://localhost:5173"
 
     # RAG

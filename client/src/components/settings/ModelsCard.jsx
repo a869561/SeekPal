@@ -30,21 +30,14 @@ function apiErrorReason(err) {
   return err?.response?.data?.message || err?.response?.data?.detail || null;
 }
 
-const CATEGORY_KEY = {
-  aiModels: "modelsCard.aiModels",
-  vision: "modelsCard.catVision",
-  llm: "modelsCard.catLlm",
-  audio: "modelsCard.catAudio",
-  ocr: "modelsCard.catOcr",
-  pdf: "modelsCard.catPdf",
-  otro: "modelsCard.catOther",
-};
-
-// Etiqueta corta por capacidad, para los chips de cada modelo de IA.
+// Etiqueta corta por capacidad, para los chips de cada modelo.
 const TAG_KEY = {
   llm: "modelsCard.tagLlm",
   vision: "modelsCard.tagVision",
   otro: "modelsCard.tagUnused",
+  audio: "modelsCard.tagAudio",
+  ocr: "modelsCard.tagOcr",
+  pdf: "modelsCard.tagPdf",
 };
 
 export default function ModelsCard() {
@@ -163,38 +156,24 @@ export default function ModelsCard() {
   }
   if (!models) return null;
 
-  // Modelos de IA (Ollama: respuestas/visión/otro) en UNA fila por modelo, con
-  // etiquetas de para qué sirve. El backend emite un item por categoría (lo usan
-  // los desplegables de Ajustes); aquí se deduplican por id. Un multimodal como
-  // gemma3 sale una vez con dos etiquetas, no duplicado. Audio/OCR/PDF se quedan
-  // como secciones propias de un solo propósito.
-  const AI_CATS = new Set(["llm", "vision", "otro"]);
-  const CAT_RANK = { llm: 0, vision: 1, otro: 2 };
-  const aiMap = new Map();
-  const rest = [];
+  // Lista única: TODOS los modelos, uno por línea, deduplicados por id y con sus
+  // categorías como etiquetas. El backend emite un item por categoría (lo usan los
+  // desplegables de Ajustes); aquí se fusionan en una fila por modelo, de modo que
+  // un multimodal como gemma3 sale una vez con dos etiquetas y cada modelo (también
+  // audio/OCR/PDF) muestra para qué sirve. Vienen ya ordenados por tipo y potencia.
+  const CAT_RANK = { llm: 0, vision: 1, otro: 2, audio: 3, ocr: 4, pdf: 5 };
+  const byId = new Map();
   for (const m of models) {
-    if (AI_CATS.has(m.category)) {
-      const cur = aiMap.get(m.id);
-      if (cur) {
-        if (!cur.cats.includes(m.category)) cur.cats.push(m.category);
-        cur.active = cur.active || m.active;
-      } else {
-        aiMap.set(m.id, { ...m, cats: [m.category] });
-      }
+    const cur = byId.get(m.id);
+    if (cur) {
+      if (!cur.cats.includes(m.category)) cur.cats.push(m.category);
+      cur.active = cur.active || m.active;
     } else {
-      rest.push(m);
+      byId.set(m.id, { ...m, cats: [m.category] });
     }
   }
-  const aiModels = [...aiMap.values()];
-  for (const m of aiModels) m.cats.sort((a, b) => (CAT_RANK[a] ?? 9) - (CAT_RANK[b] ?? 9));
-
-  // aiModels como primera sección; el resto (audio/OCR/PDF) agrupado por categoría.
-  const groups = aiModels.length ? [{ category: "aiModels", items: aiModels }] : [];
-  for (const m of rest) {
-    const last = groups[groups.length - 1];
-    if (last && last.category === m.category) last.items.push(m);
-    else groups.push({ category: m.category, items: [m] });
-  }
+  const allModels = [...byId.values()];
+  for (const m of allModels) m.cats.sort((a, b) => (CAT_RANK[a] ?? 9) - (CAT_RANK[b] ?? 9));
 
   // Porcentaje de la descarga en curso (null si aún no se conoce el total).
   const pct = pullProgress && pullProgress.total
@@ -225,14 +204,8 @@ export default function ModelsCard() {
       {!collapsed && (<>
       <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 mt-1">{t("modelsCard.subtitle")}</p>
 
-      <div className="space-y-4">
-        {groups.map((g) => (
-          <div key={g.category}>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1.5">
-              {t(CATEGORY_KEY[g.category] || "modelsCard.catOther")}
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-              {g.items.map((m) => (
+      <div className="space-y-1.5">
+        {allModels.map((m) => (
                 <div
                   key={m.id}
                   className="px-2.5 py-1.5 rounded-lg border border-slate-100 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-700/20"
@@ -251,11 +224,7 @@ export default function ModelsCard() {
                           {m.cats.map((c) => (
                             <span
                               key={c}
-                              className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
-                                c === "otro"
-                                  ? "bg-slate-200/70 text-slate-500 dark:bg-slate-600/40 dark:text-slate-400"
-                                  : "bg-brand/10 text-brand dark:bg-brand/20"
-                              }`}
+                              className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-brand/10 text-brand dark:bg-brand/20"
                             >
                               {t(TAG_KEY[c] || "modelsCard.catOther")}
                             </span>
@@ -325,9 +294,6 @@ export default function ModelsCard() {
                     <p className="mt-1.5 text-[11px] text-warning">{m.deleteNote}</p>
                   )}
                 </div>
-              ))}
-            </div>
-          </div>
         ))}
       </div>
 

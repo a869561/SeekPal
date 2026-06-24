@@ -871,6 +871,23 @@ def _install_sync(item: dict) -> None:
             if isinstance(total, (int, float)) and total:
                 _pull_status["completed"] = int(completed or 0)
                 _pull_status["total"] = int(total)
+        # Ollama no expone las capabilities hasta tener el modelo descargado, así que
+        # se valida aquí: si el modelo no sirve como respuestas ni como visión (p. ej.
+        # solo embeddings), se descarta para no dejar pesos inservibles ocupando disco.
+        # Si Ollama no reporta capabilities (modelos antiguos), se conserva por si es
+        # un LLM utilizable que simplemente no las declara.
+        _caps_cache.pop(_norm_model(item["id"]), None)
+        caps = ollama_capabilities(item["id"])
+        if caps and categorize_ollama(item["id"]) == ["otro"]:
+            try:
+                _ollama_client().delete(item["id"])
+            except Exception:  # noqa: BLE001
+                pass
+            raise ValueError(
+                f"«{item['id']}» no es utilizable en SeekPal (capacidades: "
+                f"{', '.join(caps)}). Solo se admiten modelos de respuestas o de "
+                "visión. Se descargó para comprobarlo y se ha eliminado."
+            )
     elif mgr == "whisper":
         from huggingface_hub import snapshot_download
         size = item["id"].split(":", 1)[1]

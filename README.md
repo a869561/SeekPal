@@ -69,7 +69,7 @@ npm run dev
 
 - Backend en `http://localhost:3000` (docs OpenAPI en `/docs`)
 - Frontend en `http://localhost:5173`
-- Contraseña por defecto la primera vez: `seekpal`
+- Contraseña por defecto la primera vez: `user1111` (recomendado cambiarla desde Ajustes en el primer uso)
 
 ## API
 
