@@ -3,6 +3,9 @@ import { useTranslation } from "react-i18next";
 import { Loader2, CheckCircle, AlertCircle, Sparkles, Mic, Film, Layers, RefreshCw, FileText, Download, ScanText, Eye, MessageSquare, HardDrive } from "lucide-react";
 import { getSettings, saveSettings } from "../../api/settings.js";
 import InfoHint from "../ui/InfoHint.jsx";
+import Button from "../ui/Button.jsx";
+import CollapsibleHeader from "../ui/CollapsibleHeader.jsx";
+import useCollapsed from "../../hooks/useCollapsed.js";
 import {
   restartApp, invalidateHardwareCache,
   getDoclingStatus, installDocling, getModels,
@@ -13,11 +16,13 @@ const OCR_QUALITY_OPTIONS = [
   { id: "server", sizeMB: 140, note: "Preciso, fuentes estilizadas y juegos" },
 ];
 
-const WHISPER_MODELS = [
-  { id: "tiny",   sizeMB: 39,   note: "Mas rapido, calidad baja" },
-  { id: "base",   sizeMB: 74,   note: "Rapido, calidad moderada" },
-  { id: "small",  sizeMB: 244,  note: "Buena calidad, algo mas lento" },
-  { id: "medium", sizeMB: 769,  note: "Mejor calidad, mas lento" },
+// Todos los tamaños de Whisper conocidos (para el selector de descarga)
+const WHISPER_SIZES = [
+  { id: "tiny",     sizeMB: 39,   note: "Mas rapido, calidad baja" },
+  { id: "base",     sizeMB: 74,   note: "Rapido, calidad moderada" },
+  { id: "small",    sizeMB: 244,  note: "Buena calidad, algo mas lento" },
+  { id: "medium",   sizeMB: 769,  note: "Mejor calidad, mas lento" },
+  { id: "large-v3", sizeMB: 3090, note: "Maxima calidad, muy pesado" },
 ];
 
 // Valores por defecto para campos que el servidor puede devolver como null.
@@ -50,6 +55,8 @@ export default function RagSettingsCard() {
   const [state, setState] = useState("idle"); // idle | saving | restarting | done | error
 
   const [installed, setInstalled] = useState([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [collapsed, toggleCollapsed] = useCollapsed("rag");
 
   // Estado de la instalacion de Docling (separado del flujo de guardado RAG)
   const [doclingInstalled, setDoclingInstalled] = useState(false);
@@ -72,7 +79,7 @@ export default function RagSettingsCard() {
       } catch { /* ignore */ }
       try {
         const ms = await getModels();
-        setInstalled(ms.filter((m) => m.installed));
+        setInstalled(ms);
       } catch { /* ignore */ }
       finally { setLoading(false); }
     })();
@@ -83,7 +90,7 @@ export default function RagSettingsCard() {
     if (doclingState !== "installing") return;
     const interval = setInterval(async () => {
       try {
-        const ds = await getDoclingStatus();
+        const ds = await getDoclingStatus(true); // estado cambiando: ir a red
         if (ds.status === "done" || ds.installed) {
           setDoclingInstalled(true);
           setDoclingState("done");
@@ -107,6 +114,22 @@ export default function RagSettingsCard() {
     }
   };
 
+  // Refresca la lista de modelos instalados (para que los recién descargados
+  // aparezcan en los desplegables) y el estado de Docling, sin tocar el
+  // formulario para no descartar cambios sin guardar.
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      const ms = await getModels(true);
+      setInstalled(ms);
+    } catch { /* ignore */ }
+    try {
+      const ds = await getDoclingStatus(true);
+      setDoclingInstalled(!!ds.installed);
+    } catch { /* ignore */ }
+    setRefreshing(false);
+  };
+
   if (loading) {
     return (
       <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-card">
@@ -125,12 +148,28 @@ export default function RagSettingsCard() {
   const busy = state === "saving" || state === "restarting";
 
   const optionsFor = (category, current) => {
-    const ids = installed.filter((m) => m.category === category).map((m) => m.id);
+    const ids = installed.filter((m) => m.category === category && m.installed).map((m) => m.id);
     if (current && !ids.includes(current)) ids.unshift(current);
     return ids;
   };
   const llmOptions = optionsFor("llm", form.llmModel);
   const visionOptions = optionsFor("vision", form.visionModel);
+
+  // Whisper: solo los tamaños instalados (manager=whisper, installed=true)
+  // más el activo actual por seguridad. El id en el backend es "whisper:<size>".
+  const installedWhisperModels = installed.filter((m) => m.manager === "whisper" && m.installed);
+  const installedWhisperSizes = installedWhisperModels.map((m) => {
+    // id puede ser "whisper:small" o directamente "small"
+    const raw = m.id || "";
+    return raw.startsWith("whisper:") ? raw.slice("whisper:".length) : raw;
+  });
+  const activeWhisperSize = form.whisperModel || "small";
+  const whisperSelectOptions = installedWhisperSizes.includes(activeWhisperSize)
+    ? installedWhisperSizes
+    : [activeWhisperSize, ...installedWhisperSizes];
+
+  const whisperMeta = (id) => WHISPER_SIZES.find((m) => m.id === id);
+
   const visionModelInfo = installed.find((m) => m.id === form.visionModel);
   const visionLacksCapability = !!visionModelInfo && visionModelInfo.category !== "vision";
 
@@ -159,7 +198,7 @@ export default function RagSettingsCard() {
         }
         await waitForRestart();
         setState("done");
-        const fresh = await getSettings();
+        const fresh = await getSettings(true);
         const snapshot = { ...FIELD_DEFAULTS, ...fresh };
         setOriginal(snapshot);
         setForm({ ...snapshot });
@@ -178,7 +217,7 @@ export default function RagSettingsCard() {
     await new Promise((r) => setTimeout(r, 2000));
     for (let i = 0; i < 60; i++) {
       try {
-        await getSettings();
+        await getSettings(true); // debe llegar a red para detectar el backend caído/vivo
         return;
       } catch {
         await new Promise((r) => setTimeout(r, 1000));
@@ -190,10 +229,27 @@ export default function RagSettingsCard() {
 
   return (
     <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-card">
-      <div className="flex items-center gap-2 mb-5">
-        <Sparkles size={18} className="text-brand" />
-        <h2 className="font-semibold text-slate-800 dark:text-slate-100">{t("ragSettings.title")}</h2>
-      </div>
+      <CollapsibleHeader
+        icon={Sparkles}
+        title={t("ragSettings.title")}
+        collapsed={collapsed}
+        onToggle={toggleCollapsed}
+        actions={
+          <Button
+            variant="ghost"
+            size="sm"
+            className="!p-1.5 hover:text-brand"
+            onClick={handleRefresh}
+            disabled={refreshing || busy}
+            title={t("hardware.refresh")}
+          >
+            <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
+          </Button>
+        }
+      />
+
+      {!collapsed && (<>
+      <div className="mt-5" />
 
       {/* Reranker */}
       <div className="mb-5 flex items-center justify-between gap-3">
@@ -306,20 +362,24 @@ export default function RagSettingsCard() {
       {/* Modelo Whisper */}
       <div className="mb-5">
         <OptionHeader icon={Mic} title={t("ragSettings.whisperModel")} hint={t("ragSettings.whisperModelHint")} />
-        <input
-          list="whisper-options"
-          value={form.whisperModel || "small"}
+
+        {/* Solo los tamaños instalados */}
+        <select
+          value={activeWhisperSize}
           disabled={busy || !(form.indexMultimedia ?? true)}
           onChange={(e) => update("whisperModel", e.target.value)}
           className="w-full mt-2 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand/50 disabled:opacity-50"
-        />
-        <datalist id="whisper-options">
-          {WHISPER_MODELS.map((m) => (
-            <option key={m.id} value={m.id}>{m.id} ({m.sizeMB} MB) — {m.note}</option>
-          ))}
-          <option value="large-v3">large-v3 (~3 GB)</option>
-        </datalist>
-        <p className="text-[11px] text-slate-400 mt-1">{t("ragSettings.whisperCustomHint")}</p>
+        >
+          {whisperSelectOptions.map((id) => {
+            const m = whisperMeta(id);
+            const label = m
+              ? `${m.id} (${m.sizeMB >= 1000 ? `${(m.sizeMB / 1000).toFixed(1)} GB` : `${m.sizeMB} MB`}) — ${m.note}`
+              : id;
+            return (
+              <option key={id} value={id}>{label}</option>
+            );
+          })}
+        </select>
       </div>
 
       {/* Modelo de visión (captioning de imágenes) */}
@@ -408,13 +468,14 @@ export default function RagSettingsCard() {
               <AlertCircle size={12} /> {t("ragSettings.restartRequired")}
             </div>
           )}
-          <button
+          <Button
+            variant="primary"
+            size="lg"
+            className="w-full"
             onClick={handleApply}
-            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-brand hover:brightness-110 active:scale-[0.98] text-white text-sm font-medium transition"
           >
-            <RefreshCw size={15} />
             {needsRestart ? t("ragSettings.applyRestart") : t("ragSettings.apply")}
-          </button>
+          </Button>
         </>
       )}
 
@@ -445,6 +506,7 @@ export default function RagSettingsCard() {
           <AlertCircle size={15} /> {t("ragSettings.error")}
         </div>
       )}
+      </>)}
     </div>
   );
 }
