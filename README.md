@@ -6,7 +6,7 @@ Proyecto de Trabajo de Fin de Grado (TFG).
 
 ## Características principales
 
-- **Búsqueda semántica**: embeddings densos (BGE-M3) + BM25 sparse + fusión híbrida (RRF) + reranker.
+- **Búsqueda semántica**: embeddings densos (multilingual-e5-large) + BM25 sparse + fusión híbrida (RRF) + reranker.
 - **Preguntas en lenguaje natural**: generación con LLM local (Ollama), streaming y citación de fuentes.
 - **Multimodal**: extrae texto de PDFs (Docling/PyMuPDF + OCR), documentos Office, audio (Whisper), imágenes (captioning con VLM) y más.
 - **Privado y local**: ningún dato sale del equipo; modelos de embedding, reranker y LLM corren localmente.
@@ -19,10 +19,10 @@ Cliente (React + Vite)
       |  HTTP / SSE
 Backend (FastAPI + Python)
   ├─ Ingesta: Docling/PyMuPDF · Whisper · RapidOCR · Pillow · VLM captioning
-  ├─ Embeddings: FastEmbed (BGE-M3 denso + BM25 sparse)
+  ├─ Embeddings: FastEmbed (multilingual-e5-large denso + BM25 sparse)
   ├─ Almacén vectorial: Qdrant (local, fichero)
   ├─ Reranker: jina-reranker-v2-base-multilingual
-  └─ Generación: Ollama (Qwen3:4b por defecto, streaming)
+  └─ Generación: Ollama (gemma3:4b por defecto, streaming)
 Base de datos: MongoDB (metadatos de fuentes y ficheros)
 ```
 
@@ -51,7 +51,7 @@ Doble clic en `start.bat`. El script:
 Accesos una vez arrancado:
 - Frontend: `http://localhost:5173`
 - Backend / OpenAPI: `http://localhost:3000/docs`
-- Contraseña inicial: `seekpal` (recomendado cambiarla desde Ajustes en el primer uso).
+- Contraseña inicial: `user1111` (recomendado cambiarla desde Ajustes en el primer uso).
 
 ## Arranque manual
 
@@ -92,10 +92,10 @@ Las variables de entorno se configuran en `backend/.env` (copiar desde `backend/
 | `PORT` | `3000` | Puerto del backend |
 | `JWT_SECRET` | `seekpal_secret_change_me` | Secreto JWT (cambiar en producción) |
 | `JWT_EXPIRES_MINUTES` | `480` | TTL del token (minutos) |
-| `DEFAULT_PASSWORD` | `seekpal` | Contraseña inicial |
+| `DEFAULT_PASSWORD` | `user1111` | Contraseña inicial |
 | `CORS_ORIGIN` | `http://localhost:5173` | Origen permitido por CORS |
 | `OLLAMA_URL` | `http://localhost:11434` | URL de Ollama |
-| `LLM_MODEL` | `qwen3:4b` | Modelo LLM (Ollama) |
+| `LLM_MODEL` | `gemma3:4b` | Modelo LLM (Ollama) |
 | `RAG_RERANKER_DEVICE` | `auto` | Device del reranker: `auto`, `cpu`, `cuda` |
 | `SEEKPAL_VISION_MODEL` | `qwen2.5vl:3b` | Modelo de visión para captioning |
 
@@ -103,7 +103,7 @@ Las variables de entorno se configuran en `backend/.env` (copiar desde `backend/
 
 ```bash
 cd backend
-pytest tests/rag/ -v    # ~70 tests unitarios, sin modelos reales
+pytest tests/ -v        # suite de tests (unitarios y de integración)
 ```
 
 ## Estructura del proyecto
@@ -134,7 +134,7 @@ SeekPal/
 | `Qdrant/bm25` | ~2 MB | Embeddings sparse BM25 |
 | `jinaai/jina-reranker-v2-base-multilingual` | ~280 MB | Reranker cross-encoder |
 | `faster-whisper small` | ~244 MB | Transcripción de audio |
-| `qwen3:4b` (Ollama) | ~2.5 GB | Generación de respuestas (pull manual o `start.bat`) |
+| `gemma3:4b` (Ollama) | ~3.3 GB | Generación de respuestas (pull manual o `start.bat`) |
 
 ## Licencia
 

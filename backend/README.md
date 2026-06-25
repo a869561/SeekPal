@@ -11,7 +11,7 @@ Pregunta del usuario
 [q original, variante 1, variante 2, variante 3]
    |
    v retrieve_multi (paralelo)
-[dense embed BGE-M3] + [BM25 sparse]  -->  Qdrant hybrid search (RRF)
+[dense embed multilingual-e5-large] + [BM25 sparse]  -->  Qdrant hybrid search (RRF)
    |
    v Reranker (jina-reranker-v2-base-multilingual)
    |
@@ -20,7 +20,7 @@ Pregunta del usuario
    v GenerationService
 prompt = qa_template + top-k chunks
    |
-   v Ollama (Qwen3:4b, streaming)
+   v Ollama (gemma3:4b, streaming)
    |
 SSE al frontend: retrieved -> thinking? -> token... -> done
 ```
@@ -37,7 +37,7 @@ backend/
 │   ├── schemas/           DTOs Pydantic (entrada/salida)
 │   ├── services/
 │   │   ├── rag/
-│   │   │   ├── embedding_service.py    BGE-M3 (denso) + BM25 (sparse) via FastEmbed/ONNX
+│   │   │   ├── embedding_service.py    multilingual-e5-large (denso) + BM25 (sparse) via FastEmbed/ONNX
 │   │   │   ├── vector_service.py       Qdrant hybrid search
 │   │   │   ├── retrieval_service.py    RRF + reranker + MMR
 │   │   │   ├── generation_service.py   Ollama streaming + filtro thinking
@@ -50,7 +50,7 @@ backend/
 │   │   ├── scanner_service.py          Escaneo de carpetas + orquestación SSE
 │   │   └── watcher_service.py          Vigilancia watchdog para re-ingesta automática
 │   └── main.py            Punto de entrada (FastAPI app + lifespan)
-├── tests/                 Tests unitarios (~70) y scripts de evaluación
+├── tests/                 Tests unitarios y de integración, y scripts de evaluación
 ├── requirements.txt
 └── .env.example
 ```
@@ -59,7 +59,7 @@ backend/
 
 - Python 3.11+
 - MongoDB 6+ (en local, por Docker o instalación directa)
-- Ollama 0.4+ con el modelo LLM descargado (`ollama pull qwen3:4b`)
+- Ollama 0.4+ con el modelo LLM descargado (`ollama pull gemma3:4b`)
 
 ## Instalación
 
@@ -101,10 +101,10 @@ OpenAPI interactivo: `http://localhost:3000/docs`
 | `PORT` | `3000` | Puerto del backend |
 | `JWT_SECRET` | `seekpal_secret_change_me` | Secreto JWT (cambiar en producción) |
 | `JWT_EXPIRES_MINUTES` | `480` | TTL del token (minutos) |
-| `DEFAULT_PASSWORD` | `seekpal` | Contraseña inicial |
+| `DEFAULT_PASSWORD` | `user1111` | Contraseña inicial |
 | `CORS_ORIGIN` | `http://localhost:5173` | Origen permitido por CORS |
 | `OLLAMA_URL` | `http://localhost:11434` | URL de Ollama |
-| `LLM_MODEL` | `qwen3:4b` | Modelo LLM para generación |
+| `LLM_MODEL` | `gemma3:4b` | Modelo LLM para generación |
 | `RAG_CHUNK_SIZE` | `512` | Tamaño de chunk (tokens) |
 | `RAG_CHUNK_OVERLAP` | `64` | Solapamiento entre chunks (tokens) |
 | `RAG_TOP_K` | `5` | Chunks recuperados por consulta |
