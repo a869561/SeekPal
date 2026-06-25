@@ -1,117 +1,67 @@
-# SeekPal
+# SeekPal — Backend
 
-Motor de busqueda y asistente de documentos local basado en RAG (Retrieval-Augmented Generation). Indexa carpetas de ficheros (PDF, Word, PowerPoint, Excel, audio, imagenes, etc.) y permite hacer preguntas en lenguaje natural sobre su contenido.
+Motor RAG local para búsqueda documental multimodal, implementado con FastAPI y Python.
 
-Todo corre **en tu maquina**: los modelos de embedding y el LLM se ejecutan con Ollama sin enviar datos a ningun servidor externo.
-
----
-
-## Arquitectura
-
-```
-+----------------------------------------------------------------------+
-|                          CLIENTE (React + Vite)                      |
-|  +----------+  +----------+  +---------------+  +---------------+   |
-|  |  Search  |  |   Ask    |  |   Sources     |  |   Settings    |   |
-|  |  (SSE)   |  |  (SSE)   |  |   (ingest)    |  |  (hardware)   |   |
-|  +----+-----+  +----+-----+  +------+--------+  +-------+-------+   |
-+-------+--------------+---------------+-------------------+-----------+
-        |              |               |                   | HTTP/SSE
-+-------v--------------v---------------v-------------------v-----------+
-|                        BACKEND (FastAPI)                             |
-|                                                                      |
-|  /api/ask                                                            |
-|    1. GenerationService.expand_query()  -> 3 variantes              |
-|    2. RetrievalService.retrieve_multi()                              |
-|         +- EmbeddingService (BGE-M3 dense, ONNX)  -+               |
-|         +- SparseEmbeddingService (BM25)            +-> Qdrant      |
-|         +- VectorService.search() hybrid RRF        |   (local)     |
-|         +- RerankerService (jina-reranker)                          |
-|         +- MMR diversity selection                                   |
-|    3. GenerationService.generate_stream() -> Ollama                 |
-|         +- _think_filter() -> "token" / "thinking"                  |
-|    SSE: retrieved -> thinking? -> token... -> done                  |
-|                                                                      |
-|  /api/ingest                                                         |
-|    ScannerService                                                    |
-|      +- walk + classify (MIME)                                       |
-|      +- Extractor (PDF/DOCX/PPTX/XLS/TXT/audio/image)              |
-|      +- ChunkingService (recursive 512/64)                           |
-|      +- EmbeddingService.embed_texts() (dense)                       |
-|      +- SparseEmbeddingService.embed_texts() (BM25)                  |
-|      +- VectorService.upsert() -> Qdrant                             |
-|                                                                      |
-|  WatcherService (watchdog, unico Observer compartido)                |
-|  MongoDB (Beanie ODM) -- Sources, Files, Config                      |
-+----------------------------------------------------------------------+
-        |                   |
-   +----v----+         +----v----+
-   | Qdrant  |         | Ollama  |
-   | (local) |         | (local) |
-   | dense + |         | Qwen3:4b|
-   |  BM25   |         +---------+
-   +---------+
-```
-
-### Pipeline RAG detallado
+## Arquitectura del pipeline RAG
 
 ```
 Pregunta del usuario
    |
-   v expand_query (LLM)
-[q original, variante1, variante2, variante3]
+   v expand_query (LLM, Ollama)
+[q original, variante 1, variante 2, variante 3]
    |
    v retrieve_multi (paralelo)
-[dense embed] + [BM25 sparse]  -->  Qdrant hybrid search (RRF)
-   |              (por variante)           |
-   +--------------------------------------------> RRF fusion
-                                           |
-                               v Reranker (jina-reranker)
-                                           |
-                               v MMR diversidad (lambda=0.7)
-                                           |
-                                      top-k chunks
-                                           |
-                               v GenerationService
-                         prompt = qa_template + chunks
-                                           |
-                              Ollama (Qwen3:4b, stream)
-                                           |
-                            [thinking]  [token] [token] ...
-                                           |
-                                     SSE al frontend
+[dense embed BGE-M3] + [BM25 sparse]  -->  Qdrant hybrid search (RRF)
+   |
+   v Reranker (jina-reranker-v2-base-multilingual)
+   |
+   v MMR diversidad (lambda=0.7)
+   |
+   v GenerationService
+prompt = qa_template + top-k chunks
+   |
+   v Ollama (Qwen3:4b, streaming)
+   |
+SSE al frontend: retrieved -> thinking? -> token... -> done
 ```
 
----
+## Estructura
+
+```
+backend/
+├── app/
+│   ├── core/              Config, DB (Beanie/Motor), seguridad (JWT/bcrypt), respuestas
+│   ├── deps/              Dependencias inyectables (auth)
+│   ├── models/            Documentos MongoDB: Source, FileDoc, Config (Beanie ODM)
+│   ├── routers/           Endpoints FastAPI: auth, sources, ingest, ask, search, stats...
+│   ├── schemas/           DTOs Pydantic (entrada/salida)
+│   ├── services/
+│   │   ├── rag/
+│   │   │   ├── embedding_service.py    BGE-M3 (denso) + BM25 (sparse) via FastEmbed/ONNX
+│   │   │   ├── vector_service.py       Qdrant hybrid search
+│   │   │   ├── retrieval_service.py    RRF + reranker + MMR
+│   │   │   ├── generation_service.py   Ollama streaming + filtro thinking
+│   │   │   ├── chunking_service.py     Chunking recursivo (512/64)
+│   │   │   ├── device_planner.py       Planificador VRAM-aware (ONNX/GPU)
+│   │   │   ├── audio_service.py        Whisper (faster-whisper)
+│   │   │   ├── image_service.py        Captioning con VLM (Ollama)
+│   │   │   ├── index_service.py        Coordinación ingesta → Qdrant
+│   │   │   └── extractors/             Extractores por formato (PDF, DOCX, PPTX, audio, imagen...)
+│   │   ├── scanner_service.py          Escaneo de carpetas + orquestación SSE
+│   │   └── watcher_service.py          Vigilancia watchdog para re-ingesta automática
+│   └── main.py            Punto de entrada (FastAPI app + lifespan)
+├── tests/                 Tests unitarios (~70) y scripts de evaluación
+├── requirements.txt
+└── .env.example
+```
 
 ## Requisitos
 
-| Componente | Minimo | Recomendado |
-|-----------|--------|-------------|
-| Python | 3.11+ | 3.12+ |
-| RAM | 8 GB | 16 GB |
-| Almacenamiento | 5 GB libres | 20 GB |
-| Ollama | 0.4+ | ultima |
-| MongoDB | 6+ | 7+ |
-| Node.js | 18+ | 20+ |
+- Python 3.11+
+- MongoDB 6+ (en local, por Docker o instalación directa)
+- Ollama 0.4+ con el modelo LLM descargado (`ollama pull qwen3:4b`)
 
-**GPU**: opcional. Ollama usa CUDA/ROCm automaticamente. Embeddings usan ONNX Runtime (CUDA, DirectML o CPU).
-
----
-
-## Instalacion
-
-### 1. Requisitos previos
-
-```bash
-# Instalar Ollama: https://ollama.com
-ollama pull qwen3:4b          # LLM (~2.5 GB)
-ollama pull moondream          # Opcional: captioning de imagenes
-
-# MongoDB corriendo en localhost:27017
-```
-
-### 2. Backend
+## Instalación
 
 ```bash
 cd backend
@@ -121,99 +71,70 @@ python -m venv .venv
 # Linux/Mac: source .venv/bin/activate
 
 pip install -r requirements.txt
+cp .env.example .env   # ajustar si es necesario
 ```
 
-GPU opcional:
+Aceleración GPU opcional (NVIDIA):
 ```bash
-pip install onnxruntime-gpu nvidia-cublas-cu12 nvidia-cudnn-cu12  # NVIDIA
-pip install onnxruntime-directml                                    # AMD/Intel (Windows)
+pip install onnxruntime-gpu nvidia-cublas-cu12 nvidia-cudnn-cu12
 ```
 
-### 3. Frontend
-
+Aceleración GPU opcional (AMD/Intel, Windows):
 ```bash
-cd client
-npm install
+pip install onnxruntime-directml
 ```
 
-### 4. Configuracion (backend/.env)
-
-```env
-MONGO_URI=mongodb://localhost:27017
-OLLAMA_URL=http://localhost:11434
-LLM_MODEL=qwen3:4b
-
-# Opcionales
-RAG_THINKING_ENABLED=false
-RAG_MULTI_QUERY_ENABLED=true
-RAG_MMR_ENABLED=true
-RAG_RERANKER_ENABLED=true
-```
-
-### 5. Arrancar
+## Arranque
 
 ```bash
-# Backend
-cd backend && uvicorn app.main:app --port 8000 --reload
-
-# Frontend
-cd client && npm run dev
+uvicorn app.main:app --host 127.0.0.1 --port 3000 --reload
 ```
 
-Abre http://localhost:5173
+OpenAPI interactivo: `http://localhost:3000/docs`
 
----
+## Configuración (backend/.env)
 
-## Uso rapido
-
-1. **Fuentes** -> **Nueva fuente** -> selecciona carpeta -> **Indexar**
-2. **Asistente** -> escribe tu pregunta -> respuesta con citas
-
----
+| Variable | Valor por defecto | Descripción |
+|----------|-------------------|-------------|
+| `MONGO_URI` | `mongodb://localhost:27017` | URI de conexión a MongoDB |
+| `MONGO_DB` | `seekpal` | Nombre de la base de datos |
+| `PORT` | `3000` | Puerto del backend |
+| `JWT_SECRET` | `seekpal_secret_change_me` | Secreto JWT (cambiar en producción) |
+| `JWT_EXPIRES_MINUTES` | `480` | TTL del token (minutos) |
+| `DEFAULT_PASSWORD` | `seekpal` | Contraseña inicial |
+| `CORS_ORIGIN` | `http://localhost:5173` | Origen permitido por CORS |
+| `OLLAMA_URL` | `http://localhost:11434` | URL de Ollama |
+| `LLM_MODEL` | `qwen3:4b` | Modelo LLM para generación |
+| `RAG_CHUNK_SIZE` | `512` | Tamaño de chunk (tokens) |
+| `RAG_CHUNK_OVERLAP` | `64` | Solapamiento entre chunks (tokens) |
+| `RAG_TOP_K` | `5` | Chunks recuperados por consulta |
+| `RAG_RERANKER_DEVICE` | `auto` | Device del reranker: `auto`, `cpu`, `cuda` |
+| `SEEKPAL_VISION_MODEL` | `qwen2.5vl:3b` | Modelo VLM para captioning de imágenes |
 
 ## Tests
 
 ```bash
-cd backend
-pytest tests/rag/ -v    # ~70 tests unitarios, sin modelos reales
+pytest tests/rag/ -v        # tests unitarios del pipeline RAG (~70)
+pytest tests/ -q            # todos los tests
 ```
 
----
+Los tests unitarios no requieren modelos reales ni conexión a Qdrant/MongoDB.
 
-## Estructura
+## API principal
 
-```
-SeekPal/
-+-- backend/
-|   +-- app/
-|   |   +-- core/          # Config, DB
-|   |   +-- models/        # MongoDB ODM
-|   |   +-- routers/       # FastAPI endpoints
-|   |   +-- services/
-|   |       +-- rag/
-|   |           +-- embedding_service.py    # BGE-M3 + BM25
-|   |           +-- vector_service.py       # Qdrant hybrid
-|   |           +-- retrieval_service.py    # Search + reranker + MMR + multi-query
-|   |           +-- generation_service.py   # Ollama + thinking filter
-|   |           +-- benchmark_service.py    # Recall@k, MRR, latency
-|   +-- tests/rag/         # 70+ tests
-+-- client/                # React + Vite
-```
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `GET` | `/health` | No | Estado del servidor y MongoDB |
+| `POST` | `/api/auth/login` | No | `{ password }` → `{ accessToken }` |
+| `POST` | `/api/auth/change-password` | Sí | Cambio de contraseña |
+| `GET` | `/api/sources` | Sí | Lista de fuentes indexadas |
+| `POST` | `/api/sources` | Sí | Añadir directorio `{ name, path }` |
+| `DELETE` | `/api/sources/:id` | Sí | Eliminar fuente y sus ficheros |
+| `POST` | `/api/sources/:id/ingest` | Sí | Ingesta SSE (stream de progreso) |
+| `GET` | `/api/ask` | Sí | Pregunta RAG (SSE streaming) |
+| `GET` | `/api/search` | Sí | Búsqueda clásica por nombre/ruta |
+| `GET` | `/api/stats/summary` | Sí | Totales y distribución por categoría |
+| `GET` | `/api/settings` | Sí | Ajustes de usuario (tema, idioma...) |
+| `GET` | `/api/system/status` | Sí | Estado de modelos y configuración |
 
----
-
-## Modelos descargados automaticamente
-
-| Modelo | Tam | Proposito |
-|--------|-----|-----------|
-| intfloat/multilingual-e5-large | ~560 MB | Embeddings densos |
-| Qdrant/bm25 | ~2 MB | BM25 sparse |
-| jinaai/jina-reranker-v2-base-multilingual | ~280 MB | Reranker |
-| faster-whisper/small | ~244 MB | Transcripcion audio |
-| qwen3:4b (Ollama) | ~2.5 GB | Generacion (pull manual) |
-
----
-
-## Licencia
-
-MIT
+Ver documentación completa en `/docs` (Swagger UI) al arrancar el backend.

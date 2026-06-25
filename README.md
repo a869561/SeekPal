@@ -1,51 +1,57 @@
-# SeekPal — Buscador inteligente de ficheros
+# SeekPal
 
-Aplicación web local para indexar, explorar y buscar ficheros en repositorios documentales con extracción automática de metadatos. TFG — fase 1: gestión de fuentes, estadísticas y búsqueda básica. La fase 2 incorporará un pipeline RAG (embeddings + LLM local).
+Asistente documental local con RAG (Retrieval-Augmented Generation). Indexa carpetas de ficheros (PDF, Word, PowerPoint, Excel, imágenes, audio, vídeo, etc.) y permite hacer preguntas en lenguaje natural sobre su contenido, con citación de fuentes. Todo el procesamiento ocurre en el equipo del usuario, sin enviar datos a servidores externos.
 
-## Stack
+Proyecto de Trabajo de Fin de Grado (TFG).
 
-- **Backend**: Python 3.11+ · FastAPI · Beanie (MongoDB ODM) · Motor · sse-starlette · watchdog
-- **Frontend**: React + Vite + Tailwind CSS + Recharts + i18next
-- **Base de datos**: MongoDB 7
-- **Auth**: Contraseña única global (bcrypt) + JWT
+## Características principales
 
-## Estructura del proyecto
+- **Búsqueda semántica**: embeddings densos (BGE-M3) + BM25 sparse + fusión híbrida (RRF) + reranker.
+- **Preguntas en lenguaje natural**: generación con LLM local (Ollama), streaming y citación de fuentes.
+- **Multimodal**: extrae texto de PDFs (Docling/PyMuPDF + OCR), documentos Office, audio (Whisper), imágenes (captioning con VLM) y más.
+- **Privado y local**: ningún dato sale del equipo; modelos de embedding, reranker y LLM corren localmente.
+- **Arranque con un clic** en Windows (`start.bat`): instala dependencias, levanta Docker/MongoDB, descarga modelos Ollama y arranca backend y frontend automáticamente.
+
+## Arquitectura
 
 ```
-SeekPal/
-├── backend/                  Backend Python (FastAPI)
-│   ├── app/
-│   │   ├── core/             Config, DB, seguridad, respuestas
-│   │   ├── models/           Documentos Mongo (Beanie)
-│   │   ├── schemas/          DTOs Pydantic
-│   │   ├── routers/          Endpoints HTTP
-│   │   ├── services/         Lógica de negocio
-│   │   ├── utils/            Utilidades transversales
-│   │   ├── deps/             Dependencias inyectables (auth)
-│   │   └── main.py           Punto de entrada
-│   ├── requirements.txt
-│   ├── Dockerfile
-│   └── .env.example
-├── client/                   Frontend React + Vite
-├── docs/                     Documentación del TFG
-├── docker-compose.yml        MongoDB (+ backend opcional con --profile full)
-└── start.bat                 Launcher Windows (Docker + backend + frontend)
+Cliente (React + Vite)
+      |  HTTP / SSE
+Backend (FastAPI + Python)
+  ├─ Ingesta: Docling/PyMuPDF · Whisper · RapidOCR · Pillow · VLM captioning
+  ├─ Embeddings: FastEmbed (BGE-M3 denso + BM25 sparse)
+  ├─ Almacén vectorial: Qdrant (local, fichero)
+  ├─ Reranker: jina-reranker-v2-base-multilingual
+  └─ Generación: Ollama (Qwen3:4b por defecto, streaming)
+Base de datos: MongoDB (metadatos de fuentes y ficheros)
 ```
 
-## Requisitos
+## Requisitos previos
 
-- Python 3.11+
-- Node.js 20+ (frontend)
-- Docker Desktop (MongoDB)
-- (Opcional) `ffmpeg` en PATH para metadatos de vídeo. Si no está, los vídeos se indexan sin duración/resolución pero no falla la ingesta.
+| Componente | Mínimo | Recomendado |
+|-----------|--------|-------------|
+| Python | 3.11+ | 3.12+ |
+| Node.js | 18+ | 20+ |
+| Docker Desktop | — | última versión |
+| Ollama | 0.4+ | última versión |
+| RAM | 8 GB | 16 GB |
+| Almacenamiento libre | 5 GB | 20 GB |
+
+GPU opcional: Ollama usa CUDA/ROCm automáticamente; los embeddings usan ONNX Runtime (CUDA, DirectML o CPU).
 
 ## Arranque rápido (Windows)
 
-Doble click en `start.bat`. El script:
-1. Comprueba/arranca Docker Desktop
-2. Levanta MongoDB
-3. Crea el venv del backend e instala dependencias (primera vez)
-4. Arranca uvicorn (backend) y vite (frontend) en ventanas separadas
+Doble clic en `start.bat`. El script:
+1. Comprueba Python, Node.js y Docker e instala dependencias (primera vez).
+2. Levanta MongoDB con Docker Compose.
+3. Instala y arranca Ollama; descarga los modelos de IA (primera vez, varios minutos).
+4. Pre-descarga los modelos de embeddings (~2 GB, primera vez).
+5. Arranca el backend (uvicorn) y el frontend (Vite) en ventanas separadas.
+
+Accesos una vez arrancado:
+- Frontend: `http://localhost:5173`
+- Backend / OpenAPI: `http://localhost:3000/docs`
+- Contraseña inicial: `seekpal` (recomendado cambiarla desde Ajustes en el primer uso).
 
 ## Arranque manual
 
@@ -56,10 +62,11 @@ docker compose up -d mongodb
 # 2. Backend
 cd backend
 python -m venv .venv
-.venv\Scripts\activate          # Linux/Mac: source .venv/bin/activate
+# Windows:  .venv\Scripts\activate
+# Linux/Mac: source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env
-uvicorn app.main:app --reload --port 3000
+cp .env.example .env        # ajustar variables si es necesario
+uvicorn app.main:app --host 127.0.0.1 --port 3000 --reload
 
 # 3. Frontend (en otra terminal)
 cd client
@@ -67,69 +74,70 @@ npm install
 npm run dev
 ```
 
-- Backend en `http://localhost:3000` (docs OpenAPI en `/docs`)
-- Frontend en `http://localhost:5173`
-- Contraseña por defecto la primera vez: `user1111` (recomendado cambiarla desde Ajustes en el primer uso)
+## Uso básico
 
-## API
+1. **Fuentes** → **Nueva fuente** → selecciona una carpeta → **Indexar**.
+   El backend extrae texto, genera embeddings y los almacena en Qdrant.
+2. **Asistente** → escribe una pregunta en lenguaje natural → respuesta con citas.
+3. **Buscar** → búsqueda clásica por nombre/ruta de fichero.
 
-| Método | Ruta | Auth | Descripción |
-|--------|------|------|-------------|
-| GET | /health | No | Estado del servidor + MongoDB |
-| POST | /api/auth/login | No | `{ password }` → `{ accessToken, ... }` |
-| POST | /api/auth/change-password | Sí | `{ currentPassword, newPassword }` |
-| GET | /api/sources | Sí | Lista de fuentes |
-| POST | /api/sources | Sí | Añadir directorio `{ name, path }` |
-| DELETE | /api/sources/:id | Sí | Eliminar fuente y sus ficheros |
-| PATCH | /api/sources/:id/auto-index | Sí | Activar/desactivar auto-reindexación |
-| POST | /api/sources/:id/ingest | Sí | Inicia ingesta (SSE stream) |
-| GET | /api/stats/summary | Sí | Resumen estadístico (totales, por categoría) |
-| GET | /api/stats/files | Sí | Ficheros paginados con filtros y ordenación |
-| GET | /api/search | Sí | Búsqueda por nombre/ruta (`q`, `category`, `sourceId`) |
-| GET | /api/settings | Sí | Ajustes UI (tema, idioma, tamaño texto) |
-| PATCH | /api/settings | Sí | Actualizar ajustes |
-| GET | /api/system/folder-picker | Sí | Abre diálogo nativo de selección de carpeta |
+## Configuración
 
-Documentación OpenAPI interactiva autogenerada en `/docs` (Swagger UI) y `/redoc`.
+Las variables de entorno se configuran en `backend/.env` (copiar desde `backend/.env.example`).
 
-### SSE de ingesta
+| Variable | Valor por defecto | Descripción |
+|----------|-------------------|-------------|
+| `MONGO_URI` | `mongodb://localhost:27017` | URI de conexión a MongoDB |
+| `MONGO_DB` | `seekpal` | Nombre de la base de datos |
+| `PORT` | `3000` | Puerto del backend |
+| `JWT_SECRET` | `seekpal_secret_change_me` | Secreto JWT (cambiar en producción) |
+| `JWT_EXPIRES_MINUTES` | `480` | TTL del token (minutos) |
+| `DEFAULT_PASSWORD` | `seekpal` | Contraseña inicial |
+| `CORS_ORIGIN` | `http://localhost:5173` | Origen permitido por CORS |
+| `OLLAMA_URL` | `http://localhost:11434` | URL de Ollama |
+| `LLM_MODEL` | `qwen3:4b` | Modelo LLM (Ollama) |
+| `RAG_RERANKER_DEVICE` | `auto` | Device del reranker: `auto`, `cpu`, `cuda` |
+| `SEEKPAL_VISION_MODEL` | `qwen2.5vl:3b` | Modelo de visión para captioning |
 
-El endpoint `POST /api/sources/:id/ingest` devuelve `text/event-stream`:
+## Tests
 
-```
-data: {"type":"scanning"}
-data: {"type":"progress","current":5,"total":120,"file":"doc.pdf"}
-data: {"type":"done"}
-data: {"type":"error","message":"..."}
+```bash
+cd backend
+pytest tests/rag/ -v    # ~70 tests unitarios, sin modelos reales
 ```
 
-## Variables de entorno
+## Estructura del proyecto
 
-Ver `backend/.env.example`.
+```
+SeekPal/
+├── backend/              Backend Python (FastAPI)
+│   ├── app/
+│   │   ├── core/         Config, DB, seguridad, respuestas
+│   │   ├── models/       Documentos Mongo (Beanie ODM)
+│   │   ├── schemas/      DTOs Pydantic
+│   │   ├── routers/      Endpoints HTTP
+│   │   ├── services/     Lógica de negocio (RAG, ingesta, etc.)
+│   │   └── main.py       Punto de entrada
+│   ├── tests/            Tests unitarios y de integración
+│   ├── requirements.txt
+│   └── .env.example
+├── client/               Frontend React + Vite + Tailwind CSS
+├── docker-compose.yml    MongoDB
+└── start.bat             Launcher Windows
+```
 
-| Variable | Default | Descripción |
-|----------|---------|-------------|
-| MONGO_URI | mongodb://localhost:27017 | URI de conexión a Mongo |
-| MONGO_DB | seekpal | Nombre de la base de datos |
-| PORT | 3000 | Puerto del backend |
-| JWT_SECRET | seekpal_secret_change_me | Secreto para firmar JWT (CAMBIAR en producción) |
-| JWT_EXPIRES_MINUTES | 480 | TTL del token |
-| DEFAULT_PASSWORD | seekpal | Contraseña inicial cuando no hay Config en Mongo |
-| CORS_ORIGIN | http://localhost:5173 | Origen permitido por CORS |
+## Modelos descargados automáticamente
 
-## Categorías de ficheros y metadatos
+| Modelo | Tamaño aprox. | Propósito |
+|--------|--------------|-----------|
+| `intfloat/multilingual-e5-large` | ~560 MB | Embeddings densos (FastEmbed/ONNX) |
+| `Qdrant/bm25` | ~2 MB | Embeddings sparse BM25 |
+| `jinaai/jina-reranker-v2-base-multilingual` | ~280 MB | Reranker cross-encoder |
+| `faster-whisper small` | ~244 MB | Transcripción de audio |
+| `qwen3:4b` (Ollama) | ~2.5 GB | Generación de respuestas (pull manual o `start.bat`) |
 
-| Categoría | Metadatos | Librerías |
-|-----------|-----------|-----------|
-| text | wordCount, charCount | stdlib |
-| document | wordCount, charCount | pypdf, python-docx, zipfile + regex |
-| image | width, height, ppi | Pillow |
-| audio | duration (s), bitrate (kbps) | mutagen |
-| video | duration, width, height, fps | ffmpeg-python (ffprobe) |
-| other | — | — |
+## Licencia
 
-## Roadmap
+MIT — ver [LICENSE](LICENSE).
 
-- **Fase 1 (actual)**: Gestión de fuentes + ingesta + estadísticas + búsqueda por nombre.
-- **Fase 2**: Pipeline RAG local (Ollama + Llama 3.2 3B + BGE-M3 + Qdrant + Docling + LlamaIndex) para respuestas en lenguaje natural con citación de fuentes.
-- **Fase 3**: Conectores externos (Google Drive, S3) y modo "remoto" opcional con APIs cloud.
+Autor: Adrián Jorge Nasarre Sánchez.

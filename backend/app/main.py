@@ -89,7 +89,7 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(
     title="SeekPal API",
     version="0.2.0",
-    description="Buscador inteligente de repositorios documentales.",
+    description="Motor RAG local para búsqueda documental multimodal.",
     lifespan=lifespan,
 )
 

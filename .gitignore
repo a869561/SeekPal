@@ -69,3 +69,6 @@ backend/.provider_preference
 htmlcov/
 .coverage
 
+# Local-only: corpus de pruebas, memoria del TFG y datos de evaluacion
+docs/
+

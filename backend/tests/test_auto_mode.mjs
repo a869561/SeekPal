@@ -23,7 +23,7 @@ try {
   const mod = await import(pathToFileURL(HOOK_PATH));
   classifyQuery = mod.classifyQuery;
 } catch (e) {
-  console.error(`❌ No se pudo importar useAutoMode.js: ${e.message}`);
+  console.error(`[ERROR] No se pudo importar useAutoMode.js: ${e.message}`);
   process.exit(1);
 }
 
@@ -172,9 +172,9 @@ const total = passed + failed;
 console.log(`\n${"═".repeat(60)}`);
 console.log(`Auto-mode classifier — ${total} tests`);
 console.log(`${"═".repeat(60)}`);
-console.log(`  ✅ Passed: ${passed}`);
+console.log(`  [OK]   Passed: ${passed}`);
 if (failed > 0) {
-  console.log(`  ❌ Failed: ${failed}`);
+  console.log(`  [FAIL] Failed: ${failed}`);
   console.log("\nFailed cases:");
   failures.forEach(f => console.log(f));
 }
