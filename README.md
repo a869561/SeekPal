@@ -138,6 +138,8 @@ SeekPal/
 
 ## Licencia
 
-MIT — ver [LICENSE](LICENSE).
+Creative Commons Atribución-NoComercial 4.0 Internacional (CC BY-NC 4.0) — ver [LICENSE](LICENSE).
+
+Se permite usar, estudiar, modificar y compartir el código **con fines no comerciales**, citando la autoría. Queda prohibido cualquier uso comercial sin permiso expreso del autor.
 
 Autor: Adrián Jorge Nasarre Sánchez.
