@@ -135,6 +135,7 @@ SeekPal/
 | `jinaai/jina-reranker-v2-base-multilingual` | ~280 MB | Reranker cross-encoder |
 | `faster-whisper small` | ~244 MB | Transcripción de audio |
 | `gemma3:4b` (Ollama) | ~3.3 GB | Generación de respuestas (pull manual o `start.bat`) |
+| `qwen2.5vl:3b` (Ollama) | ~3.2 GB | Descripción (captioning) de imágenes (pull manual o `start.bat`) |
 
 ## Licencia
 

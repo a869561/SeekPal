@@ -130,19 +130,19 @@ if !_ot! geq 15 goto ollamaup
 timeout /t 2 /nobreak >nul
 goto waitollama
 :ollamaup
-set "_flag=%~dp0backend\.models_pulled_v3"
+set "_flag=%~dp0backend\.models_pulled_v4"
 if not exist "%_flag%" (
     echo.
     echo       Descargando modelo de IA ^(primera vez, varios minutos^)...
-    ollama pull qwen3:4b
+    ollama pull gemma3:4b
     echo done > "%_flag%"
     <nul set /p "_=  [5/7] Ollama..."
 )
-set "_flag_vision=%~dp0backend\.models_vision_ready"
+set "_flag_vision=%~dp0backend\.models_vision_ready_v2"
 if not exist "%_flag_vision%" (
     echo.
-    echo       Descargando modelo de vision Moondream ^(primera vez, ~1.8 GB^)...
-    ollama pull moondream
+    echo       Descargando modelo de vision qwen2.5vl:3b ^(primera vez, ~3.2 GB^)...
+    ollama pull qwen2.5vl:3b
     echo done > "%_flag_vision%"
     <nul set /p "_=  [5/7] Ollama..."
 )
