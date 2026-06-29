@@ -146,6 +146,14 @@ if not exist "%_flag_vision%" (
     echo done > "%_flag_vision%"
     <nul set /p "_=  [5/7] Ollama..."
 )
+set "_flag_vision_fb=%~dp0backend\.models_vision_fallback_ready"
+if not exist "%_flag_vision_fb%" (
+    echo.
+    echo       Descargando modelo de vision de respaldo moondream ^(primera vez, ~1.8 GB^)...
+    ollama pull moondream
+    echo done > "%_flag_vision_fb%"
+    <nul set /p "_=  [5/7] Ollama..."
+)
 echo  OK
 
 REM ---- [6/7] Aceleracion GPU + modelos de busqueda ----

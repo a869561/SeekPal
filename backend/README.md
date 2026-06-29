@@ -7,11 +7,9 @@ Motor RAG local para búsqueda documental multimodal, implementado con FastAPI y
 ```
 Pregunta del usuario
    |
-   v expand_query (LLM, Ollama)
-[q original, variante 1, variante 2, variante 3]
+   v (opcional) expand_query (LLM) -> variantes   [multi-query: OFF por defecto]
    |
-   v retrieve_multi (paralelo)
-[dense embed multilingual-e5-large] + [BM25 sparse]  -->  Qdrant hybrid search (RRF)
+   v embed query (multilingual-e5-large) + [BM25 sparse]  -->  Qdrant hybrid search (RRF)
    |
    v Reranker (jina-reranker-v2-base-multilingual)
    |
@@ -107,15 +105,15 @@ OpenAPI interactivo: `http://localhost:3000/docs`
 | `LLM_MODEL` | `gemma3:4b` | Modelo LLM para generación |
 | `RAG_CHUNK_SIZE` | `512` | Tamaño de chunk (tokens) |
 | `RAG_CHUNK_OVERLAP` | `64` | Solapamiento entre chunks (tokens) |
-| `RAG_TOP_K` | `5` | Chunks recuperados por consulta |
+| `RAG_TOP_K` | `10` | Chunks recuperados por consulta |
 | `RAG_RERANKER_DEVICE` | `auto` | Device del reranker: `auto`, `cpu`, `cuda` |
 | `SEEKPAL_VISION_MODEL` | `qwen2.5vl:3b` | Modelo VLM para captioning de imágenes |
 
 ## Tests
 
 ```bash
-pytest tests/rag/ -v        # tests unitarios del pipeline RAG (~70)
-pytest tests/ -q            # todos los tests
+pytest tests/rag/ -v        # tests unitarios del pipeline RAG (~210)
+pytest tests/ -q            # todos los tests (~285)
 ```
 
 Los tests unitarios no requieren modelos reales ni conexión a Qdrant/MongoDB.

@@ -31,7 +31,7 @@ _defaults: dict[str, Any] = {
     "videoFrameInterval": 30,
     "videoMaxFrames": 20,
     "ocrQuality": "mobile",
-    "visionModel": os.getenv("SEEKPAL_VISION_MODEL", "moondream"),
+    "visionModel": os.getenv("SEEKPAL_VISION_MODEL", "qwen2.5vl:3b"),
     "autoFreePreviousVisionModel": False,
     # Planificador de dispositivos VRAM-aware.
     # "search" (default): prioriza latencia de consulta (reranker en GPU).
